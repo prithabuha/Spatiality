@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Paint World</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      overflow: hidden;
+      background: #FFF5E1;
+      font-family: 'Segoe UI Rounded', 'Segoe UI', system-ui, sans-serif;
+    }
+
+    #app { width: 100vw; height: 100vh; position: relative; }
+
+    /* ── 3D canvas ─────────────────────────────────────────────────────── */
+    #three-canvas {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%; z-index: 1;
+    }
+
+    /* ── Hand skeleton overlay ─────────────────────────────────────────── */
+    #hand-overlay {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 3; pointer-events: none;
+    }
+
+    /* ── Finger cursor — follows index tip ─────────────────────────────── */
+    #finger-cursor {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 15;
+      transform: translate(-50%, -50%);
+      border: 3px solid #c06000;
+      transition: width .04s, height .04s, border-color .08s, box-shadow .08s;
+      display: none;
+    }
+
+    /* ── Webcam mini-view ──────────────────────────────────────────────── */
+    #webcam-mini {
+      position: absolute; bottom: 14px; right: 14px;
+      width: 130px; height: 98px;
+      border-radius: 14px; overflow: hidden;
+      border: 3px solid rgba(200, 150, 60, 0.40);
+      z-index: 10;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+    }
+    #webcam-bg {
+      width: 100%; height: 100%;
+      object-fit: cover; transform: scaleX(-1);
+    }
+
+    /* ── Hint chip ─────────────────────────────────────────────────────── */
+    #hint-chip {
+      position: absolute;
+      bottom: 18px; left: 50%; transform: translateX(-50%);
+      background: rgba(255, 245, 225, 0.88);
+      backdrop-filter: blur(12px);
+      border: 2px solid rgba(200, 140, 40, 0.35);
+      border-radius: 28px;
+      padding: 9px 26px;
+      font-size: 14px; font-weight: 600;
+      color: #a05010;
+      z-index: 20; pointer-events: none;
+      white-space: nowrap;
+      box-shadow: 0 4px 20px rgba(160,100,20,0.12);
+      letter-spacing: 0.3px;
+    }
+
+    /* ── Brush Lab (hybrid UI) ─────────────────────────────────────────── */
+    #brush-lab-toggle {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 24;
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      color: #f8efe2;
+      background: linear-gradient(135deg, #3c4d64, #556f8c);
+      box-shadow: 0 8px 28px rgba(24, 40, 60, 0.35);
+      cursor: pointer;
+    }
+
+    #brush-lab {
+      position: absolute;
+      top: 58px;
+      left: 14px;
+      width: 290px;
+      z-index: 23;
+      border-radius: 16px;
+      border: 1px solid rgba(48, 70, 94, 0.24);
+      background:
+        radial-gradient(circle at 12% 0%, rgba(120, 165, 205, 0.18), transparent 45%),
+        linear-gradient(160deg, rgba(255, 250, 241, 0.95), rgba(248, 241, 228, 0.92));
+      backdrop-filter: blur(12px);
+      box-shadow: 0 16px 40px rgba(24, 40, 60, 0.20);
+      padding: 14px;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+
+    #brush-lab.is-collapsed {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.97);
+      pointer-events: none;
+    }
+
+    .lab-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      color: #4c5d70;
+    }
+
+    .lab-head strong {
+      font-size: 13px;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    .lab-head span {
+      font-size: 11px;
+      font-weight: 700;
+      color: #73879c;
+    }
+
+    .lab-row {
+      display: grid;
+      grid-template-columns: 92px 1fr auto;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      color: #55606f;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .lab-row input[type='range'] {
+      accent-color: #4f87ad;
+      width: 100%;
+    }
+
+    .lab-row input[type='color'] {
+      width: 100%;
+      height: 30px;
+      border: 1px solid rgba(67, 97, 122, 0.28);
+      border-radius: 8px;
+      background: #fff;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .lab-row select {
+      width: 100%;
+      height: 30px;
+      border-radius: 8px;
+      border: 1px solid rgba(67, 97, 122, 0.28);
+      background: rgba(255, 255, 255, 0.85);
+      color: #33485f;
+      font-weight: 600;
+      padding: 0 8px;
+    }
+
+    .lab-value {
+      width: 40px;
+      text-align: right;
+      font-size: 11px;
+      color: #6a7f93;
+      font-variant-numeric: tabular-nums;
+    }
+
+    @media (max-width: 720px) {
+      #brush-lab-toggle {
+        top: 10px;
+        left: 10px;
+        padding: 9px 14px;
+      }
+
+      #brush-lab {
+        top: 52px;
+        left: 10px;
+        width: min(92vw, 310px);
+      }
+    }
+
+    /* ── Colour-bucket labels (cosmetic, rendered in canvas via THREE) ─── */
+    /* No HTML panels, sliders, or buttons — everything is 3D + gesture    */
+
+    /* ── Orb touch ripple rings ─────────────────────────────────────────── */
+    /* Injected by Scene.triggerOrbRipple() on colour selection.            */
+    @keyframes orbRipple {
+      0%   {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+        border-width: 4px;
+      }
+      60%  {
+        opacity: 0.5;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(5.5);
+        opacity: 0;
+        border-width: 1px;
+      }
+    }
+
+    .orb-ripple {
+      position: fixed;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 4px solid currentColor;   /* colour set via JS style.color */
+      pointer-events: none;
+      z-index: 50;
+      animation: orbRipple 0.72s cubic-bezier(0.05, 0.45, 0.35, 1.0) forwards;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <canvas id="three-canvas"></canvas>
+  <canvas id="hand-overlay"></canvas>
+  <div id="finger-cursor"></div>
+
+  <div id="webcam-mini">
+    <video id="webcam-bg" autoplay playsinline muted></video>
+  </div>
+
+  <button id="brush-lab-toggle" type="button">Brush Lab</button>
+  <aside id="brush-lab" class="is-collapsed" aria-label="Brush controls">
+    <div class="lab-head">
+      <strong>Watercolor Studio</strong>
+      <span id="brush-profile-label">Balanced</span>
+    </div>
+
+    <label class="lab-row" for="brush-preset">
+      <span>Preset</span>
+      <select id="brush-preset">
+        <option value="fresco">Fresco Detail</option>
+        <option value="rebelle">Rebelle Inspired</option>
+        <option value="wash">Soft Wash</option>
+        <option value="dry">Dry Texture</option>
+        <option value="splash">Wet Splatter</option>
+      </select>
+      <span class="lab-value"></span>
+    </label>
+
+    <label class="lab-row" for="brush-color">
+      <span>Color</span>
+      <input id="brush-color" type="color" value="#d93060" />
+      <span class="lab-value"></span>
+    </label>
+
+    <label class="lab-row" for="brush-size">
+      <span>Size</span>
+      <input id="brush-size" type="range" min="0.016" max="0.09" step="0.001" value="0.034" />
+      <span id="brush-size-value" class="lab-value">0.034</span>
+    </label>
+
+    <label class="lab-row" for="brush-water">
+      <span>Water</span>
+      <input id="brush-water" type="range" min="0.08" max="0.90" step="0.01" value="0.42" />
+      <span id="brush-water-value" class="lab-value">0.42</span>
+    </label>
+
+    <label class="lab-row" for="brush-pigment">
+      <span>Pigment</span>
+      <input id="brush-pigment" type="range" min="0.10" max="0.90" step="0.01" value="0.34" />
+      <span id="brush-pigment-value" class="lab-value">0.34</span>
+    </label>
+
+    <label class="lab-row" for="brush-mix">
+      <span>Mixing</span>
+      <input id="brush-mix" type="range" min="0.00" max="0.85" step="0.01" value="0.30" />
+      <span id="brush-mix-value" class="lab-value">0.30</span>
+    </label>
+
+    <label class="lab-row" for="brush-smoothing">
+      <span>Smoothing</span>
+      <input id="brush-smoothing" type="range" min="0.00" max="0.85" step="0.01" value="0.25" />
+      <span id="brush-smoothing-value" class="lab-value">0.25</span>
+    </label>
+  </aside>
+
+  <div id="hint-chip">Point finger to paint · Wave both hands to clear ✦</div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

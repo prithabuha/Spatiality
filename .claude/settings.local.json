@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(npx vite:*)",
+      "Read(//c/Users/buhap/AppData/Local/Temp/claude/C--Users-buhap-thesis-2-vibe-code-2/445a948d-deeb-469d-b6d2-76f708ab4598/tasks/**)",
+      "Bash(pkill -f \"vite\")",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //PID 44608 //F)",
+      "Bash(taskkill //PID 20848 //F)",
+      "Bash(node -e ':*)",
+      "Bash(node '/c/Users/buhap/thesis 2/vibe code 2/_parse_jsonl3.cjs' 'C:\\\\Users\\\\buhap\\\\.claude\\\\projects\\\\C--Users-buhap-thesis-2-vibe-code-2\\\\445a948d-deeb-469d-b6d2-76f708ab4598.jsonl')",
+      "Bash(node '/c/Users/buhap/thesis 2/vibe code 2/_parse_jsonl.cjs' 'C:\\\\Users\\\\buhap\\\\.claude\\\\projects\\\\C--Users-buhap-thesis-2-vibe-code-2\\\\445a948d-deeb-469d-b6d2-76f708ab4598.jsonl' extract_edit 226 0)",
+      "Bash(node '/c/Users/buhap/thesis 2/vibe code 2/_parse_jsonl4.cjs' 'C:\\\\Users\\\\buhap\\\\.claude\\\\projects\\\\C--Users-buhap-thesis-2-vibe-code-2\\\\445a948d-deeb-469d-b6d2-76f708ab4598.jsonl')",
+      "Bash(node '/c/Users/buhap/thesis 2/vibe code 2/_parse_jsonl5.cjs' 'C:\\\\Users\\\\buhap\\\\.claude\\\\projects\\\\C--Users-buhap-thesis-2-vibe-code-2\\\\445a948d-deeb-469d-b6d2-76f708ab4598.jsonl' 97)",
+      "Bash(node '/c/Users/buhap/thesis 2/vibe code 2/_find_reads.cjs' 'C:\\\\Users\\\\buhap\\\\.claude\\\\projects\\\\C--Users-buhap-thesis-2-vibe-code-2\\\\445a948d-deeb-469d-b6d2-76f708ab4598.jsonl' GPGPUWatercolor)",
+      "Bash(node '/c/Users/buhap/thesis 2/vibe code 2/_find_reads.cjs' 'C:\\\\Users\\\\buhap\\\\.claude\\\\projects\\\\C--Users-buhap-thesis-2-vibe-code-2\\\\445a948d-deeb-469d-b6d2-76f708ab4598.jsonl' Scene.js)",
+      "Bash(node '/c/Users/buhap/thesis 2/vibe code 2/_find_reads.cjs' 'C:\\\\Users\\\\buhap\\\\.claude\\\\projects\\\\C--Users-buhap-thesis-2-vibe-code-2\\\\445a948d-deeb-469d-b6d2-76f708ab4598.jsonl' main.js)",
+      "Bash(node '/c/Users/buhap/thesis 2/vibe code 2/_find_reads2.cjs' 'C:\\\\Users\\\\buhap\\\\.claude\\\\projects\\\\C--Users-buhap-thesis-2-vibe-code-2\\\\445a948d-deeb-469d-b6d2-76f708ab4598.jsonl')",
+      "Bash(node '/c/Users/buhap/thesis 2/vibe code 2/_parse_jsonl5.cjs' 'C:\\\\Users\\\\buhap\\\\.claude\\\\projects\\\\C--Users-buhap-thesis-2-vibe-code-2\\\\445a948d-deeb-469d-b6d2-76f708ab4598.jsonl' 179)",
+      "Bash(node '/c/Users/buhap/thesis 2/vibe code 2/_extract_all.cjs' 'C:\\\\Users\\\\buhap\\\\.claude\\\\projects\\\\C--Users-buhap-thesis-2-vibe-code-2\\\\445a948d-deeb-469d-b6d2-76f708ab4598.jsonl' 179)",
+      "Bash(node '/c/Users/buhap/thesis 2/vibe code 2/_extract_all.cjs' 'C:\\\\Users\\\\buhap\\\\.claude\\\\projects\\\\C--Users-buhap-thesis-2-vibe-code-2\\\\445a948d-deeb-469d-b6d2-76f708ab4598.jsonl' 191)",
+      "Bash(node '/c/Users/buhap/thesis 2/vibe code 2/_extract_all.cjs' 'C:\\\\Users\\\\buhap\\\\.claude\\\\projects\\\\C--Users-buhap-thesis-2-vibe-code-2\\\\445a948d-deeb-469d-b6d2-76f708ab4598.jsonl' 193)",
+      "Bash(node '/c/Users/buhap/thesis 2/vibe code 2/_extract_all.cjs' 'C:\\\\Users\\\\buhap\\\\.claude\\\\projects\\\\C--Users-buhap-thesis-2-vibe-code-2\\\\445a948d-deeb-469d-b6d2-76f708ab4598.jsonl' 196)",
+      "Bash(node '/c/Users/buhap/thesis 2/vibe code 2/_extract_all.cjs' 'C:\\\\Users\\\\buhap\\\\.claude\\\\projects\\\\C--Users-buhap-thesis-2-vibe-code-2\\\\445a948d-deeb-469d-b6d2-76f708ab4598.jsonl' 197)"
+    ]
+  }
+}
