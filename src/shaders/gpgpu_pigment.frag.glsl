@@ -220,19 +220,18 @@ void main() {
   float fringeSignal  = smoothstep(0.01, 0.18, waterGradMag) + convergence * 2.8;
   float midDensity    = smoothstep(0.03, 0.55, newA) * (1.0 - smoothstep(0.60, 0.92, newA));
 
-  float globalBoost   = 1.0 + u_dryProgress * 0.50;
+  float globalBoost   = 1.0 + u_dryProgress * 0.18; // reduced from 0.50 — less dark rings
   float fringe        = fringeSignal * midDensity * dryingFront
-                      * (0.016 + dryProgress * 0.048) * u_edgeStrength * globalBoost;
+                      * (0.008 + dryProgress * 0.020) * u_edgeStrength * globalBoost;
 
   float preFringeA = max(newA, 0.001);
   newA = clamp(newA + fringe, 0.0, 1.0);
 
-  // Fringe darkening: K-M absorption at edge → colour concentrates, darkens
-  if (fringe > 0.006 && newA > 0.01) {
+  // Fringe darkening: K-M absorption at edge — REDUCED to avoid harsh dark rings
+  if (fringe > 0.004 && newA > 0.01) {
     vec3  hue      = newRGB / preFringeA;
-    // Concentrate colour via K-M: increase K/S → lower reflectance
     vec3  ks       = _kmReflToKS(clamp(hue, vec3(0.01), vec3(0.99)));
-    ks            *= (1.0 + fringe * 4.0);  // absorption boost at fringe
+    ks            *= (1.0 + fringe * 1.2);  // was 4.0 — now subtle concentration
     hue            = _kmKSToRefl(ks);
     hue            = _clampHueRange(hue);
     newRGB         = hue * newA;

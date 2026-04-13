@@ -320,9 +320,9 @@ bindBrushLab();
 
 // ── God Mode binding ──────────────────────────────────────────────────────────
 const godDefaults = {
-  size: 0.034, pigment: 0.30, splat: 0.55,
+  size: 0.018, pigment: 0.30, splat: 0.55,
   wetness: 0.40, diffusion: 0.30, mix: 0.30, gravity: 0.05,
-  wetwindow: 0.50, evap: 1.00, edge: 1.00, grain: 1.00, backrun: 1.00,
+  wetwindow: 1.50, evap: 0.60, edge: 0.30, grain: 1.00, backrun: 1.00,
 };
 
 function applyGodMode() {
@@ -557,8 +557,8 @@ function doPaint(normX, normY, input = {}) {
 
   const dynamicSize = THREE.MathUtils.clamp(
     brushState.size * (0.68 + pressure * 0.34) * (1.0 - speedNorm * 0.08),
-    0.012,
-    0.070
+    0.003,   // allow very fine strokes
+    0.090
   );
   const dynamicWater = THREE.MathUtils.clamp(
     brushState.water * (0.64 + pressure * 0.22) + holdNorm * 0.02,

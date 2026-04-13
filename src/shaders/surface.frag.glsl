@@ -187,12 +187,11 @@ void main() {
   // Thin-film absorption: exponential decay through pigment layer
   vec3 kmResult = Rinf + (canvas - Rinf) * exp(-b * thickness * 2.5);
 
-  // ── Paper grain break-up at low density (dry brush / wash edges) ──────────
-  // Where paint is thin, paper fibre peaks resist pigment → grain shows through.
-  // This is the hallmark watercolour look: colour pooled in valleys, paper
-  // showing on ridges.  No outlines needed — the physics creates the edges.
-  float granule      = smoothstep(0.35, 0.75, combinedGrain);
-  float grainBreakup = granule * 0.32 * clamp(1.0 - density * 1.8, 0.0, 1.0);
+  // ── Paper grain break-up at low density ───────────────────────────────────
+  // Reduced breakup: paint stays visible at edges instead of vanishing.
+  // Paper texture shows through only at very low density washes.
+  float granule      = smoothstep(0.40, 0.80, combinedGrain);
+  float grainBreakup = granule * 0.10 * clamp(1.0 - density * 3.0, 0.0, 1.0);
   kmResult = mix(kmResult, canvas, grainBreakup);
 
   // ── Soft lighting on paint ────────────────────────────────────────────────
@@ -209,9 +208,8 @@ void main() {
   kmResult += waterTint * 0.12;
 
   // ── Final blend: painted vs unpainted ─────────────────────────────────────
-  // Smooth crossfade at low density → colours naturally merge into paper.
-  // NO hard boundaries, NO outlines — just soft K-M absorption transition.
-  float kmBlend = smoothstep(0.004, 0.06, density);
+  // Lower threshold so thin/spread paint stays visible instead of vanishing.
+  float kmBlend = smoothstep(0.001, 0.025, density);
   vec3 result = mix(canvas, kmResult, kmBlend);
 
   // Paper grain subtly visible even through paint (cold-press texture feel)
