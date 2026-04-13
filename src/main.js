@@ -27,6 +27,38 @@ const hintChip     = document.getElementById('hint-chip');
 const fingerCursor = document.getElementById('finger-cursor');
 const brushLabToggle = document.getElementById('brush-lab-toggle');
 const brushLab = document.getElementById('brush-lab');
+
+// ── God Mode elements ─────────────────────────────────────────────────────────
+const godModeToggle = document.getElementById('god-mode-toggle');
+const godModePanel  = document.getElementById('god-mode');
+const gmSliders = {
+  size:      document.getElementById('gm-size'),
+  pigment:   document.getElementById('gm-pigment'),
+  splat:     document.getElementById('gm-splat'),
+  wetness:   document.getElementById('gm-wetness'),
+  diffusion: document.getElementById('gm-diffusion'),
+  mix:       document.getElementById('gm-mix'),
+  gravity:   document.getElementById('gm-gravity'),
+  wetwindow: document.getElementById('gm-wetwindow'),
+  evap:      document.getElementById('gm-evap'),
+  edge:      document.getElementById('gm-edge'),
+  grain:     document.getElementById('gm-grain'),
+  backrun:   document.getElementById('gm-backrun'),
+};
+const gmValues = {
+  size:      document.getElementById('gv-size'),
+  pigment:   document.getElementById('gv-pigment'),
+  splat:     document.getElementById('gv-splat'),
+  wetness:   document.getElementById('gv-wetness'),
+  diffusion: document.getElementById('gv-diffusion'),
+  mix:       document.getElementById('gv-mix'),
+  gravity:   document.getElementById('gv-gravity'),
+  wetwindow: document.getElementById('gv-wetwindow'),
+  evap:      document.getElementById('gv-evap'),
+  edge:      document.getElementById('gv-edge'),
+  grain:     document.getElementById('gv-grain'),
+  backrun:   document.getElementById('gv-backrun'),
+};
 const brushPresetSelect = document.getElementById('brush-preset');
 const brushColorInput = document.getElementById('brush-color');
 const brushSizeInput = document.getElementById('brush-size');
@@ -278,6 +310,89 @@ function bindBrushLab() {
 }
 
 bindBrushLab();
+
+// ── God Mode binding ──────────────────────────────────────────────────────────
+const godDefaults = {
+  size: 0.034, pigment: 0.30, splat: 0.55,
+  wetness: 0.40, diffusion: 0.30, mix: 0.30, gravity: 0.05,
+  wetwindow: 0.50, evap: 1.00, edge: 1.00, grain: 1.00, backrun: 1.00,
+};
+
+function applyGodMode() {
+  const v = {};
+  for (const [k, el] of Object.entries(gmSliders)) {
+    v[k] = el ? parseFloat(el.value) : godDefaults[k];
+  }
+
+  // Brush geometry
+  brushState.size     = v.size;
+  brushState.pigment  = v.pigment;
+  brushState.splatSpread = v.splat;
+
+  // Flow
+  brushState.diffusion = v.diffusion;
+  brushState.colorMix  = v.mix;
+
+  // Simulation engine
+  gpgpu.backgroundWetness = v.wetness;
+  gpgpu.wetDuration        = v.wetwindow;
+  gpgpu.evaporationRate    = v.evap;
+
+  // Gravity — negative Y is downward
+  gpgpu.velUniforms.u_gravity.value.y = -v.gravity;
+
+  // Shader multipliers
+  brushState.edgeStrength        = v.edge;
+  brushState.granulationStrength = v.grain;
+  brushState.backrunStrength     = v.backrun;
+
+  // Update display values
+  if (gmValues.size)      gmValues.size.textContent      = v.size.toFixed(3);
+  if (gmValues.pigment)   gmValues.pigment.textContent   = v.pigment.toFixed(2);
+  if (gmValues.splat)     gmValues.splat.textContent     = v.splat.toFixed(2);
+  if (gmValues.wetness)   gmValues.wetness.textContent   = v.wetness.toFixed(2);
+  if (gmValues.diffusion) gmValues.diffusion.textContent = v.diffusion.toFixed(2);
+  if (gmValues.mix)       gmValues.mix.textContent       = v.mix.toFixed(2);
+  if (gmValues.gravity)   gmValues.gravity.textContent   = v.gravity.toFixed(2);
+  if (gmValues.wetwindow) gmValues.wetwindow.textContent = v.wetwindow.toFixed(2) + 's';
+  if (gmValues.evap)      gmValues.evap.textContent      = v.evap.toFixed(2) + 'x';
+  if (gmValues.edge)      gmValues.edge.textContent      = v.edge.toFixed(2);
+  if (gmValues.grain)     gmValues.grain.textContent     = v.grain.toFixed(2);
+  if (gmValues.backrun)   gmValues.backrun.textContent   = v.backrun.toFixed(2);
+}
+
+function bindGodMode() {
+  if (!godModeToggle || !godModePanel) return;
+
+  godModeToggle.addEventListener('click', () => {
+    godModePanel.classList.toggle('is-collapsed');
+  });
+
+  // Wire each slider
+  for (const el of Object.values(gmSliders)) {
+    el?.addEventListener('input', applyGodMode);
+  }
+
+  // Reset button
+  document.getElementById('gm-reset')?.addEventListener('click', () => {
+    for (const [k, el] of Object.entries(gmSliders)) {
+      if (el) el.value = String(godDefaults[k]);
+    }
+    applyGodMode();
+    flashHint('God Mode reset ↺');
+  });
+
+  // Keyboard shortcut: G key toggles God Mode
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'g') {
+      godModePanel.classList.toggle('is-collapsed');
+    }
+  });
+
+  applyGodMode(); // apply defaults on init
+}
+
+bindGodMode();
 
 // ── Auto-drip ─────────────────────────────────────────────────────────────────
 let handStillTimer = 0;

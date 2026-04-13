@@ -98,6 +98,11 @@ export class GPGPUWatercolor {
     this._totalTime      = 0.0;   // total simulation time elapsed
     this._lastStrokeTime = -99.0; // time of most recent brush stroke
 
+    // ── God Mode controls (set from UI sliders) ───────────────────────────────
+    this.wetDuration      = 0.5;   // seconds paint stays fully wet (0.1 = fast dry, 2.0 = slow)
+    this.evaporationRate  = 1.0;   // multiplier on drying speed (1=normal, 2=double speed)
+    this.backgroundWetness = 0.4;  // base humidity of paper [0=bone dry, 1=soaking wet]
+
     // ── Pigment uniforms ─────────────────────────────────────────────────────
     this.pigUniforms = {
       tPigment:     { value: this.pigRT[0].texture },
@@ -292,7 +297,9 @@ export class GPGPUWatercolor {
     // 0.5 s → 0.8 s: dryProgress lerps 0 → 1         (drying transition)
     // > 0.8 s:        dryProgress = 1                  (fully dried)
     const elapsed      = this._totalTime - this._lastStrokeTime;
-    const globalDryProg = Math.max(0, Math.min(1, (elapsed - 0.5) / 0.3));
+    const wetWindow    = Math.max(0.05, this.wetDuration);
+    const dryWindow    = Math.max(0.05, 0.3 / Math.max(0.1, this.evaporationRate));
+    const globalDryProg = Math.max(0, Math.min(1, (elapsed - wetWindow) / dryWindow));
     const isDrying      = globalDryProg > 0.01 ? 1.0 : 0.0;
     // Write to velUniforms — pigUniforms share the same uniform objects
     this.velUniforms.u_isDrying.value    = isDrying;
@@ -304,7 +311,9 @@ export class GPGPUWatercolor {
     // Sync uniform mappings
     this.velUniforms.u_viscosity.value   = 0.05 + this.uniforms.u_diffusionRate.value * 0.25;
     this.velUniforms.u_brushForce.value  = 0.4  + this.uniforms.u_flowVelocity.value  * 1.0;
-    this.velUniforms.u_dryRate.value     = 0.12 + (1.0 - this.uniforms.u_wetCanvas.value) * 0.18;
+    // Base dryRate driven by wetness + evaporation; backgroundWetness slows evaporation
+    const wetFactor = Math.max(0, 1.0 - this.backgroundWetness * 0.7);
+    this.velUniforms.u_dryRate.value     = (0.12 + wetFactor * 0.18) * Math.max(0.05, this.evaporationRate);
     this.velUniforms.u_brushRadius.value = this.uniforms.u_brushSize.value;
     this.velUniforms.u_waterLoad.value   = this.uniforms.u_waterLoad.value;
     this.pigUniforms.u_brushRadius.value = this.uniforms.u_brushSize.value;
