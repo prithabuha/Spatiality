@@ -75,9 +75,10 @@ const brushSmoothingValue = document.getElementById('brush-smoothing-value');
 
 function getPerformanceProfile() {
   const profiles = {
-    high:     { pixelRatioCap: 2.0,  simResolution: 512, antialias: true },
-    balanced: { pixelRatioCap: 1.5,  simResolution: 384, antialias: true },
-    fast:     { pixelRatioCap: 1.25, simResolution: 320, antialias: false },
+    projection: { pixelRatioCap: 4.0,  simResolution: 1024, antialias: true  }, // 4K projector
+    high:       { pixelRatioCap: 2.0,  simResolution: 768,  antialias: true  },
+    balanced:   { pixelRatioCap: 1.5,  simResolution: 512,  antialias: true  },
+    fast:       { pixelRatioCap: 1.25, simResolution: 384,  antialias: false },
   };
 
   const qualityParam = new URLSearchParams(window.location.search)
@@ -85,6 +86,12 @@ function getPerformanceProfile() {
     ?.toLowerCase();
   if (qualityParam && profiles[qualityParam]) {
     return { name: qualityParam, ...profiles[qualityParam] };
+  }
+
+  // ?projection=true → force maximum quality for large-screen installs
+  const projectionMode = new URLSearchParams(window.location.search).get('projection');
+  if (projectionMode === 'true' || projectionMode === '1') {
+    return { name: 'projection', ...profiles.projection };
   }
 
   const cores = navigator.hardwareConcurrency ?? 4;

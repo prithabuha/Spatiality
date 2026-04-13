@@ -23,6 +23,7 @@ varying vec2 vUv;
 uniform sampler2D tPaint;
 uniform sampler2D tVelocity;
 uniform sampler2D tSubstrate;
+uniform sampler2D u_paperTex;   // high-res canvas paper texture
 uniform vec3  u_lightDir;
 uniform vec3  u_baseColor;
 uniform float u_time;
@@ -30,6 +31,7 @@ uniform vec2  u_screenSize;
 uniform vec2  u_paintUvOffset;
 uniform vec2  u_paintUvScale;
 uniform vec2  u_substrateTexelSize;
+uniform vec2  u_paperTexScale;  // UV repeat scale per surface
 
 // ── Noise ────────────────────────────────────────────────────────────────────
 vec2 _h2(vec2 p) {
@@ -100,16 +102,27 @@ void main() {
   float paperGrain  = coarseGrain * 0.50 + fineGrain * 0.32 + microGrain * 0.18;
   paperGrain        = pow(paperGrain, 0.60);
 
-  // Grain intensifies as paint dries and settles into paper fibres
-  float grainDryBoost = 1.0 + dryProgress * 0.35;
-  paperGrain = clamp(paperGrain * grainDryBoost, 0.0, 1.0);
+  // (grainDryBoost applied below with combined texture)
 
-  // ── Watercolour paper surface — warm, slightly off-white, textured ────────
-  // The paper IS the primary light source in K-M theory.
-  // Valleys are slightly darker (pigment pools there), ridges are bright.
-  vec3 valleyCol = vec3(0.930, 0.915, 0.890);  // warm cream in valleys
-  vec3 ridgeCol  = vec3(0.996, 0.992, 0.982);  // near-white ridges
-  vec3 paperColor = mix(valleyCol, ridgeCol, paperGrain);
+  // ── High-res paper texture (canvas-generated fibre structure) ────────────
+  // Sample at scaled UV so fibres appear physically correct per surface.
+  vec2 paperUV = vUv * u_paperTexScale;
+  vec3 paperTex = texture2D(u_paperTex, paperUV).rgb;
+
+  // Blend procedural Worley grain with the canvas fibre texture
+  // → Worley controls pigment trapping; canvas texture controls visual look.
+  float combinedGrain = paperGrain * 0.45 + paperTex.r * 0.55;
+  combinedGrain = pow(clamp(combinedGrain, 0.0, 1.0), 0.62);
+
+  // Grain intensifies as paint dries and settles into paper fibres
+  float grainDryBoost2 = 1.0 + dryProgress * 0.35;
+  combinedGrain = clamp(combinedGrain * grainDryBoost2, 0.0, 1.0);
+
+  // ── Watercolour paper surface — pure white cold-press ─────────────────────
+  // Real cotton-rag paper: pure white base, dark fiber valleys, bright ridges.
+  vec3 valleyCol = vec3(0.820, 0.820, 0.825);  // cool gray fiber valleys
+  vec3 ridgeCol  = vec3(0.985, 0.985, 0.988);  // near-white fiber ridges
+  vec3 paperColor = mix(valleyCol, ridgeCol, combinedGrain);
 
   // Apply soft diffuse lighting to paper
   vec3 canvas = paperColor * diffuse;
@@ -178,12 +191,12 @@ void main() {
   // Where paint is thin, paper fibre peaks resist pigment → grain shows through.
   // This is the hallmark watercolour look: colour pooled in valleys, paper
   // showing on ridges.  No outlines needed — the physics creates the edges.
-  float granule      = smoothstep(0.35, 0.75, paperGrain);
+  float granule      = smoothstep(0.35, 0.75, combinedGrain);
   float grainBreakup = granule * 0.32 * clamp(1.0 - density * 1.8, 0.0, 1.0);
   kmResult = mix(kmResult, canvas, grainBreakup);
 
   // ── Soft lighting on paint ────────────────────────────────────────────────
-  float surfaceShade = 0.88 + paperGrain * 0.16;
+  float surfaceShade = 0.88 + combinedGrain * 0.16;
   float lightOnPaint = NdotL * 0.15 + 0.92;
   kmResult *= surfaceShade * lightOnPaint;
 

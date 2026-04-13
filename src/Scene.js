@@ -16,6 +16,7 @@ import { ShaderPass }            from 'three/examples/jsm/postprocessing/ShaderP
 import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectionShader.js';
 import surfaceVert   from './shaders/surface.vert.glsl?raw';
 import surfaceFrag   from './shaders/surface.frag.glsl?raw';
+import { buildPaperTexture }     from './PaperTexture.js';
 
 export class Scene {
   constructor(renderer, gpgpu) {
@@ -32,13 +33,19 @@ export class Scene {
     this.camera.position.set(0, 3.0, 10.0);
     this.camera.lookAt(0, 3.0, 0);
 
+    // ── Paper texture (generated once, shared across all surfaces) ──────────
+    // Build at 1024px — high enough for 4K projection, low enough to not stall.
+    console.time('[Paper] texture generate');
+    this._paperTex = buildPaperTexture(1024);
+    console.timeEnd('[Paper] texture generate');
+
     // ── Scene ────────────────────────────────────────────────────────────────
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xfff5e1);  // warm cream
-    this.scene.fog = new THREE.FogExp2(0xfff5e1, 0.010);
+    this.scene.background = new THREE.Color(0xf5f5f5);  // pure paper white
+    this.scene.fog = new THREE.FogExp2(0xf5f5f5, 0.007);
 
-    // ── Kid-friendly lighting: warm hemisphere + soft key ───────────────────
-    this.scene.add(new THREE.HemisphereLight(0xfff5e1, 0xf0d8a0, 2.5));
+    // ── Studio lighting: cool neutral for projection accuracy ───────────────
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0xe8e8f0, 2.8));
 
     const key = new THREE.DirectionalLight(0xffffff, 1.2);
     key.position.set(0, 14, 4);
@@ -71,7 +78,7 @@ export class Scene {
   }
 
   // ── Paintable material ───────────────────────────────────────────────────────
-  _makePaintMat(baseColor, paintRect) {
+  _makePaintMat(baseColor, paintRect, paperTexScale) {
     return new THREE.ShaderMaterial({
       vertexShader:   surfaceVert,
       fragmentShader: surfaceFrag,
@@ -79,13 +86,15 @@ export class Scene {
         tPaint:       { value: this.gpgpu.outputTexture },
         tVelocity:    { value: this.gpgpu.velOutputTexture },
         tSubstrate:   { value: this.gpgpu.substrateRT.texture },
+        u_paperTex:   { value: this._paperTex },
         u_lightDir:   { value: this._lightDirVec },
         u_baseColor:  { value: new THREE.Color(baseColor) },
         u_time:       { value: 0.0 },
         u_screenSize: { value: this._screenSize },
-        u_paintUvOffset: { value: paintRect.offset.clone() },
-        u_paintUvScale:  { value: paintRect.scale.clone() },
+        u_paintUvOffset:      { value: paintRect.offset.clone() },
+        u_paintUvScale:       { value: paintRect.scale.clone() },
         u_substrateTexelSize: { value: this.gpgpu.substrateTexelSize },
+        u_paperTexScale:      { value: paperTexScale.clone() },
       },
     });
   }
@@ -115,19 +124,21 @@ export class Scene {
   _buildRoom() {
     const W = 28, H = 12, D = 30;
 
+    // paperTexScale: how many times the 1024px texture repeats on each surface
+    // Larger surface → more repeats so fibres stay a physical size (~2cm on paper)
     const panels = [
-      { key:'front', p:[0, H/2, -D/2], r:[0,  0,          0], w:W, h:H, c:'#fdf8f0' }, // front wall
-      { key:'back',  p:[0, H/2,  D/2], r:[0,  Math.PI,    0], w:W, h:H, c:'#faf5ec' }, // back wall
-      { key:'left',  p:[-W/2,H/2, 0],  r:[0,  Math.PI/2,  0], w:D, h:H, c:'#f8f3ea' }, // left wall
-      { key:'right', p:[ W/2,H/2, 0],  r:[0, -Math.PI/2,  0], w:D, h:H, c:'#f8f3ea' }, // right wall
-      { key:'floor', p:[0, 0, 0],      r:[-Math.PI/2, 0,  0], w:W, h:D, c:'#f2ede4' }, // floor
+      { key:'front', p:[0, H/2, -D/2], r:[0,  0,          0], w:W, h:H, c:'#f8f8f8', pts: new THREE.Vector2(W * 0.45, H * 0.45) },
+      { key:'back',  p:[0, H/2,  D/2], r:[0,  Math.PI,    0], w:W, h:H, c:'#f7f7f7', pts: new THREE.Vector2(W * 0.45, H * 0.45) },
+      { key:'left',  p:[-W/2,H/2, 0],  r:[0,  Math.PI/2,  0], w:D, h:H, c:'#f7f7f7', pts: new THREE.Vector2(D * 0.45, H * 0.45) },
+      { key:'right', p:[ W/2,H/2, 0],  r:[0, -Math.PI/2,  0], w:D, h:H, c:'#f7f7f7', pts: new THREE.Vector2(D * 0.45, H * 0.45) },
+      { key:'floor', p:[0, 0, 0],      r:[-Math.PI/2, 0,  0], w:W, h:D, c:'#f5f5f5', pts: new THREE.Vector2(W * 0.45, D * 0.45) },
     ];
 
-    panels.forEach(({ key, p, r, w, h, c }) => {
+    panels.forEach(({ key, p, r, w, h, c, pts }) => {
       const paintRect = this._paintAtlasRects[key];
       const mesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(w, h, 40, 40),
-        this._makePaintMat(c, paintRect)
+        new THREE.PlaneGeometry(w, h, 60, 60),
+        this._makePaintMat(c, paintRect, pts)
       );
       mesh.position.set(...p);
       mesh.rotation.set(...r);
@@ -139,10 +150,10 @@ export class Scene {
       this._paintMeshes.push(mesh);
     });
 
-    // Ceiling — visual only, warm cream
+    // Ceiling — pure white
     const ceil = new THREE.Mesh(
       new THREE.PlaneGeometry(W, D),
-      new THREE.MeshStandardMaterial({ color: 0xfff8f0, roughness: 1, metalness: 0 })
+      new THREE.MeshStandardMaterial({ color: 0xf8f8f8, roughness: 1, metalness: 0 })
     );
     ceil.position.y = H;
     ceil.rotation.x = Math.PI / 2;
