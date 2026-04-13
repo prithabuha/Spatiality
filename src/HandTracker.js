@@ -77,15 +77,23 @@ export class HandTracker {
     try {
       const { HandLandmarker, FilesetResolver } =
         await import('@mediapipe/tasks-vision');
-      const vision = await FilesetResolver.forVisionTasks('/wasm');
-      this._landmarker = await HandLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: '/models/hand_landmarker.task',
-          delegate: 'GPU',
-        },
-        numHands:    2,         // track two hands for wave-clear
-        runningMode: 'VIDEO',
-      });
+      const base   = import.meta.env.BASE_URL;          // '/Spatiality/' on GH Pages, '/' locally
+      const vision = await FilesetResolver.forVisionTasks(base + 'wasm');
+
+      // Try GPU first, fall back to CPU silently
+      let delegate = 'GPU';
+      try {
+        this._landmarker = await HandLandmarker.createFromOptions(vision, {
+          baseOptions: { modelAssetPath: base + 'models/hand_landmarker.task', delegate },
+          numHands: 2, runningMode: 'VIDEO',
+        });
+      } catch (_gpuErr) {
+        delegate = 'CPU';
+        this._landmarker = await HandLandmarker.createFromOptions(vision, {
+          baseOptions: { modelAssetPath: base + 'models/hand_landmarker.task', delegate },
+          numHands: 2, runningMode: 'VIDEO',
+        });
+      }
       await this._startCamera();
       this.ready = true;
       // Hide camera prompt if visible
