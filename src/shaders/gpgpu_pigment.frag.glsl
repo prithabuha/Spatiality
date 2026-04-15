@@ -122,7 +122,7 @@ void main() {
   vec4  prev     = texture2D(tPigment, uv);
 
   // Per-pixel dryProgress: 0 = wet, 1 = locked
-  float dryProgress = smoothstep(0.80, 1.0, dryTimer);  // matches velocity pass — 0.5s dry
+  float dryProgress = smoothstep(0.625, 1.0, dryTimer);
 
   // ── BAKED LAYER LOCK ──────────────────────────────────────────────────────
   bool fullyDried   = (dryProgress >= 0.98);
@@ -155,7 +155,7 @@ void main() {
   // Tint-style diffusion: strong wet-on-wet bleeding.
   // Quadratic + linear water dependency creates natural flow:
   //   lots of water → fast spreading, little water → pigment stays put.
-  float D = (water * water * 0.018 + water * 0.003) * u_backrunStrength;  // halved — stops centre vanishing
+  float D = (water * water * 0.048 + water * 0.008) * u_backrunStrength;
   D *= (1.0 - dryProgress);
 
   // Burst: new stroke landing on existing wet paint → turbulent bleed
@@ -193,16 +193,6 @@ void main() {
     float total  = max(isoBld + capBld, 0.001);
     newA   = mix(newA,   mix(iso8.a,   cap.a,   capBld / total), isoBld + capBld);
     newRGB = mix(newRGB, mix(iso8.rgb, cap.rgb, capBld / total), isoBld + capBld);
-  }
-
-  // Density floor: pigment can spread but not vanish — conserve mass
-  if (prev.a > 0.01 && newA < prev.a) {
-    float floor_ = prev.a * (1.0 - D * 8.0);  // floor drops with diffusion speed
-    if (newA < floor_) {
-      float rescale = floor_ / max(newA, 0.001);
-      newA   = floor_;
-      newRGB = clamp(newRGB * rescale, vec3(0.0), vec3(1.0));
-    }
   }
 
   // ── C. Divergence-driven fringing (Curtis et al. "dried ring") ────────────
