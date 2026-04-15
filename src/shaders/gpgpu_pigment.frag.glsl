@@ -125,7 +125,8 @@ void main() {
   float dryProgress = smoothstep(0.625, 1.0, dryTimer);
 
   // ── BAKED LAYER LOCK ──────────────────────────────────────────────────────
-  bool fullyDried   = (dryProgress >= 0.98);
+  // Lock at 25% dry (≈0.57s) instead of 98% — prevents density loss during wet phase
+  bool fullyDried   = (dryProgress >= 0.25);
   bool neverPainted = (water < 0.004 && dryTimer < 0.001);
   if ((fullyDried || neverPainted) && u_painting < 0.5) {
     gl_FragColor = prev;
@@ -395,9 +396,12 @@ void main() {
   }
 
   // ── H. Pigment retention / colour lock ───────────────────────────────────
+  // retain = 1.0: density can NEVER decrease when not painting.
+  // Baked lock (above) already returns prev after 0.57 s; this floor covers
+  // the wet phase (0–0.57 s) so fringing / diffusion cannot remove pigment.
   if (u_painting < 0.5) {
     float lock   = 1.0 - smoothstep(0.05, 0.75, water);
-    float retain = 0.94 + lock * 0.04 * u_retentionStrength;
+    float retain = 1.0;  // full retention — paint stays permanently once applied
     newA = max(newA, prev.a * retain);
 
     float safePrevA = max(prev.a, 0.001);
