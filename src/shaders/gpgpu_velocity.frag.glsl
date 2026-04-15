@@ -85,8 +85,8 @@ void main() {
   float wasEverPainted = step(0.001, dryTimer);
   float isNowWet       = step(0.001, newWater);
   float shouldTick     = max(wasEverPainted, isNowWet);
-  float newTimer       = clamp(dryTimer + dt * (1.0 / 0.8) * shouldTick, 0.0, 1.0);
-  float dryProgress    = smoothstep(0.625, 1.0, newTimer);
+  float newTimer       = clamp(dryTimer + dt * (1.0 / 0.5) * shouldTick, 0.0, 1.0);  // 0.8→0.5s dry time
+  float dryProgress    = smoothstep(0.80, 1.0, newTimer);  // lock starts at 80% of timer
 
   // ── 3. Shallow Water Equation forces ──────────────────────────────────────
 
@@ -123,7 +123,7 @@ void main() {
 
   // 3d. External gravity (IMU / default downward)
   //     Gravity ∝ water² → only fully wet paint drips visibly
-  newVel += u_gravity * (newWater * newWater) * dt * 2.4;
+  newVel += u_gravity * (newWater * newWater) * dt * 0.9;  // 2.4→0.9 stops floor waves
 
   // ── 4. Stochastic splat brush stamp (Curtis et al.) + timer RESET ─────────
   //     7 randomised circular deposits simulate hair-bundle contact.
@@ -209,7 +209,7 @@ void main() {
   float hVelU = hU * vU.y;
   float hVelD = hD * vD.y;
   float waterFlux = ((hVelR - hVelL) + (hVelU - hVelD)) * 0.5;
-  newWater = max(0.0, newWater - waterFlux * dt * 0.6);
+  newWater = max(0.0, newWater - waterFlux * dt * 0.20);  // 0.6→0.20 damps SWE ripples
 
   // ── 10. Ripple clear wave ─────────────────────────────────────────────────
   if (u_rippleStrength > 0.002) {

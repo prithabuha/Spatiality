@@ -72,7 +72,7 @@ void main() {
   vec4  velData     = texture2D(tVelocity, simUV);
   float water       = velData.b;
   float dryTimer    = velData.a;
-  float dryProgress = smoothstep(0.625, 1.0, dryTimer);
+  float dryProgress = smoothstep(0.80, 1.0, dryTimer);  // matches 0.5s dry timer
   float wetness     = smoothstep(0.0, 0.22, water) * (1.0 - dryProgress * 0.85);
 
   // ── Paper bump normals from substrate height ──────────────────────────────
@@ -132,13 +132,12 @@ void main() {
   float NdotV = max(dot(N, V), 0.0);
   float sheenFactor = (1.0 - dryProgress) * wetness;
 
-  // Smooth Blinn-Phong specular — wet paper glistens gently
-  float spec = pow(NdotH, 64.0) * 0.18 * sheenFactor;
-  // Fresnel rim on wet edges
-  float fresnel = pow(1.0 - NdotV, 3.5) * sheenFactor * 0.10;
-
+  // Specular only on bare paper — suppress on painted areas to avoid white glow
   vec4  paintDataSheen = texture2D(tPaint, simUV);
   float densitySheen   = clamp(paintDataSheen.a * 2.5 + 0.15, 0.0, 1.0);
+  float unpainted      = 1.0 - smoothstep(0.02, 0.18, paintDataSheen.a);
+  float spec    = pow(NdotH, 64.0) * 0.10 * sheenFactor * unpainted;
+  float fresnel = pow(1.0 - NdotV, 3.5) * sheenFactor * 0.06 * unpainted;
   canvas += (spec + fresnel) * densitySheen;
 
   // ── Paint UV lookup ───────────────────────────────────────────────────────
@@ -159,7 +158,7 @@ void main() {
   // High saturation expansion: pull away from grey toward pure hue.
   // This is how Tint gets its vibrant, luminous colour-on-paper feel.
   float luma = dot(paintHue, vec3(0.299, 0.587, 0.114));
-  vec3  vivid = mix(vec3(luma), paintHue, 1.95);  // strong saturation boost
+  vec3  vivid = mix(vec3(luma), paintHue, 1.30);  // reduced — 1.95 pushed to white
   vivid = clamp(vivid, 0.0, 1.0);
 
   // ── Kubelka-Munk thin-film reflectance ────────────────────────────────────
