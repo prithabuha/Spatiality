@@ -32,6 +32,7 @@ uniform vec2  u_paintUvOffset;
 uniform vec2  u_paintUvScale;
 uniform vec2  u_substrateTexelSize;
 uniform vec2  u_paperTexScale;  // UV repeat scale per surface
+uniform float u_borderBlur;     // 0=sharp edge, 1=very soft dissolve
 
 // ── Noise ────────────────────────────────────────────────────────────────────
 vec2 _h2(vec2 p) {
@@ -120,8 +121,8 @@ void main() {
 
   // ── Watercolour paper surface — pure white cold-press ─────────────────────
   // Real cotton-rag paper: pure white base, dark fiber valleys, bright ridges.
-  vec3 valleyCol = vec3(0.820, 0.820, 0.825);  // cool gray fiber valleys
-  vec3 ridgeCol  = vec3(0.985, 0.985, 0.988);  // near-white fiber ridges
+  vec3 valleyCol = vec3(0.910, 0.910, 0.912);  // lighter valleys — reduce dark shadow at paint edges
+  vec3 ridgeCol  = vec3(0.990, 0.990, 0.992);  // near-white fiber ridges
   vec3 paperColor = mix(valleyCol, ridgeCol, combinedGrain);
 
   // Apply soft diffuse lighting to paper
@@ -207,9 +208,9 @@ void main() {
   vec3 waterTint = vec3(0.008, 0.013, 0.020) * wetness;
   kmResult += waterTint * 0.12;
 
-  // ── Final blend: painted vs unpainted ─────────────────────────────────────
-  // Lower threshold so thin/spread paint stays visible instead of vanishing.
-  float kmBlend = smoothstep(0.001, 0.025, density);
+  // ── Final blend: painted vs unpainted — border blur controlled by slider ──
+  float blurHigh = 0.012 + u_borderBlur * 0.10;  // 0=sharp(0.012), 1=soft(0.112)
+  float kmBlend  = smoothstep(0.001, blurHigh, density);
   vec3 result = mix(canvas, kmResult, kmBlend);
 
   // Paper grain subtly visible even through paint (cold-press texture feel)

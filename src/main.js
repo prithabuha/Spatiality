@@ -43,7 +43,8 @@ const gmSliders = {
   evap:      document.getElementById('gm-evap'),
   edge:      document.getElementById('gm-edge'),
   grain:     document.getElementById('gm-grain'),
-  backrun:   document.getElementById('gm-backrun'),
+  backrun:    document.getElementById('gm-backrun'),
+  borderblur: document.getElementById('gm-borderblur'),
 };
 const gmValues = {
   size:      document.getElementById('gv-size'),
@@ -57,7 +58,8 @@ const gmValues = {
   evap:      document.getElementById('gv-evap'),
   edge:      document.getElementById('gv-edge'),
   grain:     document.getElementById('gv-grain'),
-  backrun:   document.getElementById('gv-backrun'),
+  backrun:    document.getElementById('gv-backrun'),
+  borderblur: document.getElementById('gv-borderblur'),
 };
 const brushPresetSelect = document.getElementById('brush-preset');
 const brushColorInput = document.getElementById('brush-color');
@@ -322,7 +324,8 @@ bindBrushLab();
 const godDefaults = {
   size: 0.018, pigment: 0.30, splat: 0.55,
   wetness: 0.40, diffusion: 0.30, mix: 0.30, gravity: 0.05,
-  wetwindow: 1.50, evap: 0.60, edge: 0.30, grain: 1.00, backrun: 1.00,
+  wetwindow: 1.50, evap: 0.60, edge: 0.10, grain: 1.00, backrun: 1.00,
+  borderblur: 0.15,
 };
 
 function applyGodMode() {
@@ -353,6 +356,9 @@ function applyGodMode() {
   brushState.granulationStrength = v.grain;
   brushState.backrunStrength     = v.backrun;
 
+  // Surface uniforms applied directly to all paint meshes
+  scene.setPaintUniform('u_borderBlur', v.borderblur);
+
   // Update display values
   if (gmValues.size)      gmValues.size.textContent      = v.size.toFixed(3);
   if (gmValues.pigment)   gmValues.pigment.textContent   = v.pigment.toFixed(2);
@@ -365,7 +371,8 @@ function applyGodMode() {
   if (gmValues.evap)      gmValues.evap.textContent      = v.evap.toFixed(2) + 'x';
   if (gmValues.edge)      gmValues.edge.textContent      = v.edge.toFixed(2);
   if (gmValues.grain)     gmValues.grain.textContent     = v.grain.toFixed(2);
-  if (gmValues.backrun)   gmValues.backrun.textContent   = v.backrun.toFixed(2);
+  if (gmValues.backrun)    gmValues.backrun.textContent    = v.backrun.toFixed(2);
+  if (gmValues.borderblur) gmValues.borderblur.textContent = v.borderblur.toFixed(2);
 }
 
 function bindGodMode() {

@@ -95,6 +95,7 @@ export class Scene {
         u_paintUvScale:       { value: paintRect.scale.clone() },
         u_substrateTexelSize: { value: this.gpgpu.substrateTexelSize },
         u_paperTexScale:      { value: paperTexScale.clone() },
+        u_borderBlur:         { value: 0.15 },
       },
     });
   }
@@ -317,6 +318,15 @@ export class Scene {
       mesh.material.uniforms.tPaint.value    = this.gpgpu.outputTexture;
       mesh.material.uniforms.tVelocity.value = this.gpgpu.velOutputTexture;
       mesh.material.uniforms.u_time.value   += dt;
+    }
+  }
+
+  // Set a uniform on every paint surface — used by God Mode sliders
+  setPaintUniform(name, value) {
+    for (const mesh of this._paintMeshes) {
+      if (mesh.material.uniforms[name] !== undefined) {
+        mesh.material.uniforms[name].value = value;
+      }
     }
   }
 
