@@ -60,7 +60,7 @@ export class Scene {
 
     // ── Build ────────────────────────────────────────────────────────────────
     this._paintMeshes = [];
-    this._lightDirVec = new THREE.Vector3(0, 0, 0).normalize();
+    this._lightDirVec = new THREE.Vector3(0, 14, 4).normalize();
     this._screenSize = new THREE.Vector2(window.innerWidth, window.innerHeight);
     this._paintAtlasRects = this._createPaintAtlasRects();
 
