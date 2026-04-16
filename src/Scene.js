@@ -10,21 +10,21 @@
  */
 
 import * as THREE from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { EffectComposer }        from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass }            from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass }            from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectionShader.js';
-import surfaceVert from './shaders/surface.vert.glsl?raw';
-import surfaceFrag from './shaders/surface.frag.glsl?raw';
-import { buildPaperTexture } from './PaperTexture.js';
+import surfaceVert   from './shaders/surface.vert.glsl?raw';
+import surfaceFrag   from './shaders/surface.frag.glsl?raw';
+import { buildPaperTexture }     from './PaperTexture.js';
 
 export class Scene {
   constructor(renderer, gpgpu) {
-    this.gpgpu = gpgpu;
+    this.gpgpu    = gpgpu;
     this.renderer = renderer;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.shadowMap.enabled = false;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
 
     // ── Camera ──────────────────────────────────────────────────────────────
     this.camera = new THREE.PerspectiveCamera(
@@ -49,19 +49,19 @@ export class Scene {
 
     const key = new THREE.DirectionalLight(0xffffff, 1.2);
     key.position.set(0, 14, 4);
-    // key.castShadow = true;
+    key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
-    key.shadow.camera.near = 0.1;
-    key.shadow.camera.far = 60;
-    key.shadow.camera.left = key.shadow.camera.bottom = -18;
-    key.shadow.camera.right = key.shadow.camera.top = 18;
+    key.shadow.camera.near  = 0.1;
+    key.shadow.camera.far   = 60;
+    key.shadow.camera.left  = key.shadow.camera.bottom = -18;
+    key.shadow.camera.right = key.shadow.camera.top    =  18;
     key.shadow.bias = -0.001;
     this.scene.add(key);
 
     // ── Build ────────────────────────────────────────────────────────────────
     this._paintMeshes = [];
     this._lightDirVec = new THREE.Vector3(0, 14, 4).normalize();
-    this._screenSize = new THREE.Vector2(window.innerWidth, window.innerHeight);
+    this._screenSize  = new THREE.Vector2(window.innerWidth, window.innerHeight);
     this._paintAtlasRects = this._createPaintAtlasRects();
 
     this._colorBuckets = [];
@@ -80,22 +80,22 @@ export class Scene {
   // ── Paintable material ───────────────────────────────────────────────────────
   _makePaintMat(baseColor, paintRect, paperTexScale) {
     return new THREE.ShaderMaterial({
-      vertexShader: surfaceVert,
+      vertexShader:   surfaceVert,
       fragmentShader: surfaceFrag,
       uniforms: {
-        tPaint: { value: this.gpgpu.outputTexture },
-        tVelocity: { value: this.gpgpu.velOutputTexture },
-        tSubstrate: { value: this.gpgpu.substrateRT.texture },
-        u_paperTex: { value: this._paperTex },
-        u_lightDir: { value: this._lightDirVec },
-        u_baseColor: { value: new THREE.Color(baseColor) },
-        u_time: { value: 0.0 },
+        tPaint:       { value: this.gpgpu.outputTexture },
+        tVelocity:    { value: this.gpgpu.velOutputTexture },
+        tSubstrate:   { value: this.gpgpu.substrateRT.texture },
+        u_paperTex:   { value: this._paperTex },
+        u_lightDir:   { value: this._lightDirVec },
+        u_baseColor:  { value: new THREE.Color(baseColor) },
+        u_time:       { value: 0.0 },
         u_screenSize: { value: this._screenSize },
-        u_paintUvOffset: { value: paintRect.offset.clone() },
-        u_paintUvScale: { value: paintRect.scale.clone() },
+        u_paintUvOffset:      { value: paintRect.offset.clone() },
+        u_paintUvScale:       { value: paintRect.scale.clone() },
         u_substrateTexelSize: { value: this.gpgpu.substrateTexelSize },
-        u_paperTexScale: { value: paperTexScale.clone() },
-        u_borderBlur: { value: 0.15 },
+        u_paperTexScale:      { value: paperTexScale.clone() },
+        u_borderBlur:         { value: 0.15 },
       },
     });
   }
@@ -103,19 +103,19 @@ export class Scene {
   _createPaintAtlasRects() {
     const cols = 3;
     const rows = 2;
-    const gap = 0.04;
+    const gap  = 0.04;
     const cellW = (1.0 - gap * (cols + 1)) / cols;
     const cellH = (1.0 - gap * (rows + 1)) / rows;
 
     const rectAt = (col, row) => ({
       offset: new THREE.Vector2(gap + col * (cellW + gap), gap + row * (cellH + gap)),
-      scale: new THREE.Vector2(cellW, cellH),
+      scale:  new THREE.Vector2(cellW, cellH),
     });
 
     return {
       front: rectAt(0, 0),
-      back: rectAt(1, 0),
-      left: rectAt(2, 0),
+      back:  rectAt(1, 0),
+      left:  rectAt(2, 0),
       right: rectAt(0, 1),
       floor: rectAt(1, 1),
     };
@@ -128,25 +128,22 @@ export class Scene {
     // paperTexScale: how many times the 1024px texture repeats on each surface
     // Larger surface → more repeats so fibres stay a physical size (~2cm on paper)
     const panels = [
-      { key: 'front', p: [0, H / 2, -D / 2], r: [0, 0, 0], w: W, h: H, c: '#f8f8f8', pts: new THREE.Vector2(W * 0.45, H * 0.45) },
-      { key: 'back', p: [0, H / 2, D / 2], r: [0, Math.PI, 0], w: W, h: H, c: '#f7f7f7', pts: new THREE.Vector2(W * 0.45, H * 0.45) },
-      { key: 'left', p: [-W / 2, H / 2, 0], r: [0, Math.PI / 2, 0], w: D, h: H, c: '#f7f7f7', pts: new THREE.Vector2(D * 0.45, H * 0.45) },
-      { key: 'right', p: [W / 2, H / 2, 0], r: [0, -Math.PI / 2, 0], w: D, h: H, c: '#f7f7f7', pts: new THREE.Vector2(D * 0.45, H * 0.45) },
-      { key: 'floor', p: [0, 0, 0], r: [-Math.PI / 2, 0, 0], w: W, h: D, c: '#f5f5f5', pts: new THREE.Vector2(W * 0.45, D * 0.45) },
+      { key:'front', p:[0, H/2, -D/2], r:[0,  0,          0], w:W, h:H, c:'#f8f8f8', pts: new THREE.Vector2(W * 0.45, H * 0.45) },
+      { key:'back',  p:[0, H/2,  D/2], r:[0,  Math.PI,    0], w:W, h:H, c:'#f7f7f7', pts: new THREE.Vector2(W * 0.45, H * 0.45) },
+      { key:'left',  p:[-W/2,H/2, 0],  r:[0,  Math.PI/2,  0], w:D, h:H, c:'#f7f7f7', pts: new THREE.Vector2(D * 0.45, H * 0.45) },
+      { key:'right', p:[ W/2,H/2, 0],  r:[0, -Math.PI/2,  0], w:D, h:H, c:'#f7f7f7', pts: new THREE.Vector2(D * 0.45, H * 0.45) },
+      { key:'floor', p:[0, 0, 0],      r:[-Math.PI/2, 0,  0], w:W, h:D, c:'#f5f5f5', pts: new THREE.Vector2(W * 0.45, D * 0.45) },
     ];
 
     panels.forEach(({ key, p, r, w, h, c, pts }) => {
-      const paintRect = {
-        offset: new THREE.Vector2(0, 0),
-        scale: new THREE.Vector2(1, 1),
-      };
+      const paintRect = this._paintAtlasRects[key];
       const mesh = new THREE.Mesh(
         new THREE.PlaneGeometry(w, h, 60, 60),
         this._makePaintMat(c, paintRect, pts)
       );
       mesh.position.set(...p);
       mesh.rotation.set(...r);
-      // mesh.receiveShadow = true;
+      mesh.receiveShadow = true;
       mesh.userData.surfaceAspect = h / w;
       mesh.userData.surfaceId = key;
       mesh.userData.paintRect = paintRect;
@@ -169,12 +166,12 @@ export class Scene {
 
   _addCeilingGrid(W, D, H) {
     const mat = new THREE.MeshStandardMaterial({ color: 0xe8dfd0, roughness: 1, metalness: 0 });
-    for (let x = -W / 2; x <= W / 2; x += 2.5) {
+    for (let x = -W/2; x <= W/2; x += 2.5) {
       const b = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.02, D), mat);
       b.position.set(x, H - 0.01, 0);
       this.scene.add(b);
     }
-    for (let z = -D / 2; z <= D / 2; z += 2.5) {
+    for (let z = -D/2; z <= D/2; z += 2.5) {
       const b = new THREE.Mesh(new THREE.BoxGeometry(W, 0.02, 0.04), mat);
       b.position.set(0, H - 0.01, z);
       this.scene.add(b);
@@ -189,17 +186,17 @@ export class Scene {
       roughness: 0.2, metalness: 0,
     });
     [
-      { x: -W / 2 + 0.01, z: -4, ry: Math.PI / 2 },
-      { x: -W / 2 + 0.01, z: 4, ry: Math.PI / 2 },
-      { x: W / 2 - 0.01, z: -4, ry: -Math.PI / 2 },
-      { x: W / 2 - 0.01, z: 4, ry: -Math.PI / 2 },
+      { x: -W/2 + 0.01, z: -4, ry:  Math.PI/2 },
+      { x: -W/2 + 0.01, z:  4, ry:  Math.PI/2 },
+      { x:  W/2 - 0.01, z: -4, ry: -Math.PI/2 },
+      { x:  W/2 - 0.01, z:  4, ry: -Math.PI/2 },
     ].forEach(({ x, z, ry }) => {
       const win = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 4.5), windowMat);
-      win.position.set(x, H / 2 + 0.5, z);
+      win.position.set(x, H/2 + 0.5, z);
       win.rotation.y = ry;
       this.scene.add(win);
       const wLight = new THREE.PointLight(0xffe8c0, 0.8, 18);
-      wLight.position.set(x * 0.85, H / 2 + 0.5, z);
+      wLight.position.set(x * 0.85, H/2 + 0.5, z);
       this.scene.add(wLight);
     });
   }
@@ -210,11 +207,11 @@ export class Scene {
   _addColorBuckets() {
     const buckets = [
       // Quinacridone Rose — warm pinkish-red, classic watercolour primary
-      { x: -5.5, color: 0xd93060, rgb: new THREE.Color(0.85, 0.19, 0.38), name: 'Rose' },
+      { x: -5.5, color: 0xd93060, rgb: new THREE.Color(0.85, 0.19, 0.38), name: 'Rose'   },
       // French Ultramarine — deep granulating blue, most popular WC blue
-      { x: 0.0, color: 0x1a3bbf, rgb: new THREE.Color(0.10, 0.23, 0.75), name: 'Blue' },
+      { x:  0.0, color: 0x1a3bbf, rgb: new THREE.Color(0.10, 0.23, 0.75), name: 'Blue'   },
       // Hansa Yellow Medium — transparent, clean mixing yellow
-      { x: 5.5, color: 0xf5c800, rgb: new THREE.Color(0.96, 0.78, 0.02), name: 'Yellow' },
+      { x:  5.5, color: 0xf5c800, rgb: new THREE.Color(0.96, 0.78, 0.02), name: 'Yellow' },
     ];
 
     buckets.forEach(b => {
@@ -222,17 +219,17 @@ export class Scene {
       const sphere = new THREE.Mesh(
         new THREE.SphereGeometry(1.1, 48, 48),
         new THREE.MeshStandardMaterial({
-          color: b.color,
+          color:     b.color,
           roughness: 0.25,
           metalness: 0.05,
-          emissive: new THREE.Color(b.color).multiplyScalar(0.3),
+          emissive:  new THREE.Color(b.color).multiplyScalar(0.3),
         })
       );
       sphere.position.set(b.x, 1.2, 5.5);
-      sphere.castShadow = true;
+      sphere.castShadow  = true;
       sphere.receiveShadow = true;
       sphere.userData.paintColor = b.rgb;
-      sphere.userData.name = b.name;
+      sphere.userData.name       = b.name;
       this.scene.add(sphere);
       this._colorBuckets.push(sphere);
 
@@ -266,7 +263,7 @@ export class Scene {
       return null;
     }
     const sphere = hits[0].object;
-    const color = sphere.userData.paintColor;
+    const color  = sphere.userData.paintColor;
     this._bucketHits.length = 0;
     return { color, sphere };
   }
@@ -277,7 +274,7 @@ export class Scene {
     // Project 3D sphere position → 2D screen coords
     const worldPos = sphere.position.clone();
     worldPos.project(this.camera);
-    const sx = (worldPos.x * 0.5 + 0.5) * window.innerWidth;
+    const sx = (worldPos.x *  0.5 + 0.5) * window.innerWidth;
     const sy = (-worldPos.y * 0.5 + 0.5) * window.innerHeight;
     const hex = '#' + sphere.userData.paintColor.getHexString();
 
@@ -285,8 +282,8 @@ export class Scene {
     for (let i = 0; i < RING_COUNT; i++) {
       const ring = document.createElement('div');
       ring.className = 'orb-ripple';
-      ring.style.left = sx + 'px';
-      ring.style.top = sy + 'px';
+      ring.style.left  = sx + 'px';
+      ring.style.top   = sy + 'px';
       ring.style.color = hex;    // border-color inherits from CSS color
       ring.style.animationDelay = (i * 0.13) + 's';
       document.body.appendChild(ring);
@@ -304,12 +301,12 @@ export class Scene {
       this._surfaceHits.length = 0;
       return null;
     }
-    const uv = hits[0].uv;
-    const hitObj = hits[0].object;
-    const rect = hitObj.userData.paintRect;
-    const atlasU = rect.offset.x + uv.x * rect.scale.x;
-    const atlasV = rect.offset.y + uv.y * rect.scale.y;
-    const aspect = hitObj.userData.surfaceAspect ?? 1.0;
+    const uv       = hits[0].uv;
+    const hitObj   = hits[0].object;
+    const rect     = hitObj.userData.paintRect;
+    const atlasU   = rect.offset.x + uv.x * rect.scale.x;
+    const atlasV   = rect.offset.y + uv.y * rect.scale.y;
+    const aspect   = hitObj.userData.surfaceAspect ?? 1.0;
     const surfaceId = hitObj.userData.surfaceId ?? 'unknown';
     this._surfaceHits.length = 0;
     return { u: atlasU, v: atlasV, surfaceAspect: aspect, surfaceId };
@@ -318,9 +315,9 @@ export class Scene {
   // ── Per-frame ────────────────────────────────────────────────────────────────
   updatePaintTexture(dt) {
     for (const mesh of this._paintMeshes) {
-      mesh.material.uniforms.tPaint.value = this.gpgpu.outputTexture;
+      mesh.material.uniforms.tPaint.value    = this.gpgpu.outputTexture;
       mesh.material.uniforms.tVelocity.value = this.gpgpu.velOutputTexture;
-      mesh.material.uniforms.u_time.value += dt;
+      mesh.material.uniforms.u_time.value   += dt;
     }
   }
 
