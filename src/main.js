@@ -325,7 +325,7 @@ const godDefaults = {
   size: 0.018, pigment: 0.30, splat: 0.55,
   wetness: 0.40, diffusion: 0.30, mix: 0.30, gravity: 0.05,
   wetwindow: 1.50, evap: 0.60, edge: 0.10, grain: 1.00, backrun: 1.00,
-  borderblur: 0.15,
+  borderblur: 0.0,
 };
 
 function applyGodMode() {
@@ -357,7 +357,8 @@ function applyGodMode() {
   brushState.backrunStrength     = v.backrun;
 
   // Surface uniforms applied directly to all paint meshes
-  scene.setPaintUniform('u_borderBlur', v.borderblur);
+  // scene.setPaintUniform('u_borderBlur', v.borderblur);
+   scene.setPaintUniform('u_borderBlur', 0.0);
 
   // Update display values
   if (gmValues.size)      gmValues.size.textContent      = v.size.toFixed(3);
