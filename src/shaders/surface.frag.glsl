@@ -177,9 +177,15 @@ void main() {
 
   float thickness = density * 2.0;
 
-  // K/S from paint hue — boosted absorption for saturated pigment
-  vec3 ks = _kmReflToKS(vivid);
-  ks *= 2.2;  // high K (absorption), low S (scattering) → vivid colour
+  // K/S from paint hue — density-adaptive absorption:
+  //   Thin washes (density ≈ 0.1): ksBoost ≈ 1.6 → transparent, luminous
+  //   Medium wash (density ≈ 0.4): ksBoost ≈ 2.0 → rich, glowing
+  //   Thick stroke (density ≈ 0.9): ksBoost ≈ 2.9 → deep, saturated
+  // Replicates the "staining" property of watercolour pigments:
+  // light washes are delicate/transparent; built-up washes are jewel-like.
+  vec3  ks      = _kmReflToKS(vivid);
+  float ksBoost = 1.6 + density * 1.4;   // 1.6 (wash) → 3.0 (thick stroke)
+  ks *= ksBoost;
 
   // Infinite-layer reflectance R∞ and extinction coefficient b
   vec3 Rinf = _kmKSToRefl(ks);
@@ -189,10 +195,14 @@ void main() {
   vec3 kmResult = Rinf + (canvas - Rinf) * exp(-b * thickness * 2.5);
 
   // ── Paper grain break-up at low density ───────────────────────────────────
-  // Reduced breakup: paint stays visible at edges instead of vanishing.
-  // Paper texture shows through only at very low density washes.
-  float granule      = smoothstep(0.40, 0.80, combinedGrain);
-  float grainBreakup = granule * 0.10 * clamp(1.0 - density * 3.0, 0.0, 1.0);
+  // Cold-press paper fibres show through thin washes — characteristic of
+  // real watercolour technique. Break-up is strong at wash edges and low
+  // density; disappears under thick opaque strokes.
+  // Anisotropic fibre streak: faint horizontal texture visible through washes.
+  float fiberStreak  = _gnoise(vUv * vec2(24.0, 90.0) + vec2(5.1, 3.3)) * 0.5 + 0.5;
+  float granule      = smoothstep(0.35, 0.78, combinedGrain * 0.65 + fiberStreak * 0.35);
+  float thinWash     = clamp(1.0 - density * 2.5, 0.0, 1.0);   // strong for thin, zero for thick
+  float grainBreakup = granule * 0.20 * thinWash;
   kmResult = mix(kmResult, canvas, grainBreakup);
 
   // ── Soft lighting on paint ────────────────────────────────────────────────
@@ -213,9 +223,11 @@ void main() {
   float kmBlend  = smoothstep(0.001, blurHigh, density);
   vec3 result = mix(canvas, kmResult, kmBlend);
 
-  // Paper grain subtly visible even through paint (cold-press texture feel)
-  float midDensity = kmBlend * (1.0 - kmBlend) * 2.0;
-  result = mix(result, result * (0.92 + paperGrain * 0.10), midDensity * 0.40);
+  // Paper grain visible through mid-density washes (cold-press texture feel)
+  // Also adds a faint horizontal fibre direction to heavy washes.
+  float midDensity  = kmBlend * (1.0 - kmBlend) * 2.0;
+  float paperMod    = 0.90 + paperGrain * 0.13 + fiberStreak * 0.05;
+  result = mix(result, result * paperMod, midDensity * 0.45);
 
   gl_FragColor = vec4(clamp(result, vec3(0.0), vec3(1.0)), 1.0);
 }

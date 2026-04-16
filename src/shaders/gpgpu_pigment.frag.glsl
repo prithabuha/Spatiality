@@ -241,9 +241,21 @@ void main() {
   // ── D. Substrate granulation — capillary deposition ───────────────────────
   //     Pigment settles into paper valleys (subst < 0.5) and is wiped from
   //     peaks (subst > 0.5).  Effect INCREASES as paint dries (Curtis model).
-  float gran1   = gnoise(uv * 72.0) * 0.5 + 0.5;
-  float gran2   = gnoise(uv * 140.0 + vec2(31.4, 17.7)) * 0.5 + 0.5;
-  float gran    = gran1 * 0.65 + gran2 * 0.35;
+  //
+  //     Three-component grain:
+  //       gran1      — isotropic coarse cell structure
+  //       gran2      — isotropic fine texture
+  //       gran_fiber — anisotropic: elongated horizontally to match paper fibres
+  //
+  //     Luminosity-dependent strength: dark pigments granulate more.
+  //     (Ultramarine, burnt sienna etc. are heavy granulators in real life.)
+  float gran1      = gnoise(uv * 72.0) * 0.5 + 0.5;
+  float gran2      = gnoise(uv * 140.0 + vec2(31.4, 17.7)) * 0.5 + 0.5;
+  float gran_fiber = gnoise(uv * vec2(28.0, 96.0) + vec2(11.3, 7.2)) * 0.5 + 0.5;
+  // Dark pigments granulate more (luminosity-based boost)
+  float pigLuma    = (newA > 0.001) ? _luma(newRGB / newA) : 1.0;
+  float granBoost  = 1.0 + (1.0 - pigLuma) * 0.55;
+  float gran       = (gran1 * 0.38 + gran2 * 0.30 + gran_fiber * 0.32) * granBoost;
   float valley  = 1.0 - subst;   // 1.0 at paper valleys, 0.0 at peaks
   float peak    = subst;          // 1.0 at paper peaks, 0.0 at valleys
   float beforeGranA = max(newA, 0.001);
@@ -260,17 +272,30 @@ void main() {
   newA = clamp(newA + depositValley - wipeFromPeak + drySettle, 0.0, 1.0);
   newRGB *= newA / beforeGranA;
 
-  // ── E. Wet-on-wet backrun bloom (zero when dry) ──────────────────────────
+  // ── E. Wet-on-wet backrun bloom — cauliflower / petal effect ────────────
+  //     Real watercolour backruns push fresh wet paint into semi-dry areas,
+  //     forming flower-like tendrils that radiate outward from the wet zone.
+  //     5-petal structure with noise-perturbed radii creates organic blooms.
+  //     Uses max() on density so no pigment is destroyed, only redistributed.
   float bloomScale = 1.0 - dryProgress;
-  if (bloomScale > 0.02 && water > 0.30 / max(u_backrunStrength, 0.4)) {
-    float bloomZone = smoothstep(0.06, 0.28, prev.a)
-                    * (1.0 - smoothstep(0.55, 0.82, prev.a));
+  if (bloomScale > 0.02 && water > 0.22 / max(u_backrunStrength, 0.4)) {
+    float bloomZone = smoothstep(0.04, 0.26, prev.a)
+                    * (1.0 - smoothstep(0.58, 0.86, prev.a));
     if (bloomZone > 0.01) {
-      float angle = gnoise(uv*18.0 + u_time*0.45) * 6.2832;
-      vec2  bv    = vec2(cos(angle), sin(angle)) * tx * 1.0 * bloomZone;
-      vec4  bs    = texture2D(tPigment, uv - bv);
-      newRGB = mix(newRGB, bs.rgb, bloomZone * 0.050 * u_backrunStrength * bloomScale);
-      newA   = mix(newA,   bs.a,   bloomZone * 0.042 * u_backrunStrength * bloomScale);
+      float baseAngle = gnoise(uv * 7.3 + vec2(u_time * 0.22, 0.0)) * 6.2832;
+      float petalR    = tx.x * (2.2 + bloomZone * 1.4);
+      float bStr      = bloomZone * u_backrunStrength * bloomScale;
+
+      // 5 petals — cauliflower tendrils radiating outward
+      for (int p = 0; p < 5; p++) {
+        float pa  = baseAngle + float(p) * 1.2566;   // 2π/5 per petal
+        float nOff = gnoise(uv * 22.0 + float(p) * vec2(3.71, 5.13) + u_time * 0.08) * 0.60;
+        float r   = petalR * (0.8 + nOff);
+        vec2  bv  = vec2(cos(pa), sin(pa)) * r * bloomZone;
+        vec4  bs  = texture2D(tPigment, clamp(uv - bv, tx, 1.0 - tx));
+        newRGB    = mix(newRGB, bs.rgb, bStr * 0.017);
+        newA      = max(newA, mix(newA, bs.a, bStr * 0.014));
+      }
     }
   }
 
@@ -384,15 +409,30 @@ void main() {
     }
   }
 
-  // ── G. Drying concentration ───────────────────────────────────────────────
-  //     As dryProgress rises, dissolved pigment concentrates on paper fibres.
-  //     Modelled as K/S increase: reflectance drops, colour darkens slightly.
+  // ── G. Drying concentration + saturation deepening ───────────────────────
+  //     As water evaporates, dissolved pigment concentrates on paper fibres.
+  //     Two effects:
+  //       (1) Density increase — pigment crowding as film thins
+  //       (2) Saturation boost — concentrated pigment absorbs more selectively
+  //           → richer, deeper colour as watercolour first dries.
+  //     This models the characteristic "colour blooms and deepens while drying"
+  //     seen in every wet watercolour wash before it fully sets.
   if (dryProgress > 0.02 && dryProgress < 0.98 && newA > 0.01 && u_painting < 0.5) {
-    float concPhase  = smoothstep(0.0, 0.8, dryProgress) * (1.0 - smoothstep(0.8, 1.0, dryProgress));
-    float concFactor = concPhase * 0.010 * u_concentrationRate;
+    float concPhase   = smoothstep(0.0, 0.8, dryProgress) * (1.0 - smoothstep(0.8, 1.0, dryProgress));
+    float concFactor  = concPhase * 0.012 * u_concentrationRate;
     float beforeConcA = max(newA, 0.001);
     newA   = clamp(newA + concFactor * newA, 0.0, 0.88);
     newRGB *= newA / beforeConcA;
+
+    // Saturation deepening: concentrated pigment → richer, more vivid colour
+    if (newA > 0.02) {
+      vec3  hue      = clamp(newRGB / max(newA, 0.001), vec3(0.0), vec3(1.0));
+      float lumC     = _luma(hue);
+      float satBoost = 1.0 + concPhase * 0.24 * u_concentrationRate;
+      hue            = mix(vec3(lumC), hue, satBoost);
+      hue            = _clampHueRange(clamp(hue, vec3(0.0), vec3(1.0)));
+      newRGB         = hue * newA;
+    }
   }
 
   // ── H. Pigment retention / colour lock ───────────────────────────────────
