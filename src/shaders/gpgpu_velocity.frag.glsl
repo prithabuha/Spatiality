@@ -103,21 +103,17 @@ void main() {
 
   // 3a. Hydrostatic pressure gradient: F = -g_hydro · ∇(water_height)
   //     Water flows from high water regions to low water regions.
-  //     Anisotropic: cold-press paper has horizontal fibres → water spreads
-  //     35% faster along X, slightly slower along Y.  This creates the
-  //     characteristic elongated bead that follows the paper grain.
-  vec2 waterGrad  = vec2(hR - hL, hU - hD) * 0.5;
-  float g_hydro   = 2.0;
-  vec2  fiberAniso = vec2(1.35, 0.90);   // horizontal fibre bias
-  newVel -= waterGrad * fiberAniso * g_hydro * dt;
+  //     This is the primary spreading force in shallow water equations.
+  vec2 waterGrad = vec2(hR - hL, hU - hD) * 0.5;
+  float g_hydro  = 2.0;  // hydrostatic gravity — stronger spread
+  newVel -= waterGrad * g_hydro * dt;
 
   // 3b. Capillary suction: F_cap = -κ · ∇(paper_height) · water
   //     Water is drawn toward paper valleys (low substrate height).
-  //     Capillary channels also follow the fibre direction (anisotropic).
+  //     Strength proportional to water amount (no water = no capillary flow).
   vec2 substGrad  = vec2(sR - sL, sU - sD) * 0.5;
-  float kappa_cap = 0.60;
-  vec2  capAniso  = vec2(1.28, 0.80);    // capillary stronger along fibres
-  newVel -= substGrad * capAniso * kappa_cap * newWater * dt;
+  float kappa_cap = 0.60;  // stronger capillary flow into paper valleys
+  newVel -= substGrad * kappa_cap * newWater * dt;
 
   // 3c. Surface tension: F_st = σ · ∇²h · gradient_direction
   //     Smooths the water surface — prevents unphysical spikes.
