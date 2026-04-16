@@ -18,6 +18,8 @@ import * as THREE          from 'three';
 import { GPGPUWatercolor } from './GPGPUWatercolor.js';
 import { Scene }           from './Scene.js';
 import { HandTracker }     from './HandTracker.js';
+import { DiegeticUI }      from './DiegeticUI.js';
+import { WaterCursor }     from './WaterCursor.js';
 
 // ── DOM ──────────────────────────────────────────────────────────────────────
 const canvas       = document.getElementById('three-canvas');
@@ -125,6 +127,21 @@ canvas.style.touchAction = 'none';
 const gpgpu   = new GPGPUWatercolor(renderer, { simResolution: perfProfile.simResolution });
 const scene   = new Scene(renderer, gpgpu);
 const tracker = new HandTracker(webcamBg, handOverlay);
+
+// ── Diegetic UI + Water cursor ────────────────────────────────────────────────
+scene.setBucketsVisible(false);   // replace 3D orbs with HTML palette
+
+const diegeticUI = new DiegeticUI({
+  onColorSelect: ({ r, g, b, key }) => {
+    activeColor = new THREE.Color(r, g, b);
+    if (brushColorInput) brushColorInput.value = '#' + activeColor.getHexString();
+    waterCursor.setColor(r, g, b);
+    diegeticUI.setActiveKey(key);
+  },
+});
+
+const waterCursor = new WaterCursor();
+waterCursor.setColor(activeColor.r, activeColor.g, activeColor.b);
 
 console.info(
   `[Perf] profile=${perfProfile.name}, sim=${perfProfile.simResolution}, pixelRatioCap=${perfProfile.pixelRatioCap}`
@@ -487,43 +504,32 @@ function haptic(pattern = [30]) {
   if (navigator.vibrate) navigator.vibrate(pattern);
 }
 
-// ── Finger cursor ─────────────────────────────────────────────────────────────
-function updateFingerCursor(normX, normY, active) {
-  if (!fingerCursor) return;
-  const sz  = Math.round(brushSize * 520 + 14);
-  const hex = '#' + activeColor.getHexString();
-  fingerCursor.style.display     = 'block';
-  fingerCursor.style.left        = normX * window.innerWidth  + 'px';
-  fingerCursor.style.top         = normY * window.innerHeight + 'px';
-  fingerCursor.style.width       = sz + 'px';
-  fingerCursor.style.height      = sz + 'px';
-  fingerCursor.style.color       = hex;
-  fingerCursor.style.borderColor = active ? hex : 'rgba(160,120,40,0.5)';
-  fingerCursor.style.boxShadow   = active ? `0 0 ${sz * 0.7}px ${hex}66` : 'none';
+// ── Water cursor helper (replaces old updateFingerCursor) ────────────────────
+function moveCursor(normX, normY, active) {
+  waterCursor.setPosition(normX, normY);
+  waterCursor.setActive(active);
+  waterCursor.setSize(brushSize);
+  waterCursor.show();
 }
 
 // ── Core paint dispatch ───────────────────────────────────────────────────────
 function doPaint(normX, normY, input = {}) {
-  // 1. Colour-bucket sphere check — finger dips into orb → switch colour
-  const bucketHit = scene.getColorBucketHit(normX, normY);
-  if (bucketHit) {
-    const { color: bucketColor, sphere: bucketSphere } = bucketHit;
-    const newHex = '#' + bucketColor.clone().getHexString();
-    const curHex = '#' + activeColor.getHexString();
-    if (newHex !== curHex) {
-      activeColor = bucketColor.clone();
+  // 1. Ink-well dip check — finger enters palette well → switch colour
+  const dipHit = diegeticUI.checkDip(normX, normY);
+  if (dipHit) {
+    const { r, g, b, key, name } = dipHit;
+    const newColor = new THREE.Color(r, g, b);
+    if (newColor.getHexString() !== activeColor.getHexString()) {
+      activeColor = newColor;
       if (brushColorInput) brushColorInput.value = '#' + activeColor.getHexString();
+      waterCursor.setColor(r, g, b);
+      waterCursor.triggerDip();
+      diegeticUI.triggerDipRipple(key);
       const floorHit = scene.getHitUV(normX, Math.min(normY + 0.06, 0.99));
       if (floorHit) triggerBurst(floorHit.u, floorHit.v, activeColor);
-      // Expanding ripple rings from the orb + audio pop + haptic buzz
-      scene.triggerOrbRipple(bucketSphere);
       playColorPop();
       haptic([25, 10, 25]);
-      const r = bucketColor.r, b = bucketColor.b;
-      const label = r > 0.7 && b < 0.3 ? 'Red'
-                  : b > 0.7 && r < 0.3 ? 'Blue'
-                  : 'Yellow';
-      flashHint(`${label} paint!`);
+      flashHint(`${name} paint! ✦`);
     }
     resetStrokeState();
     return;
@@ -707,7 +713,7 @@ canvas.addEventListener('pointermove', e => {
   if (!mouseDown) return;
   const nx = e.clientX / window.innerWidth;
   const ny = e.clientY / window.innerHeight;
-  updateFingerCursor(nx, ny, true);
+  moveCursor(nx, ny, true);
   doPaint(nx, ny, { pressure: getPointerPressure(e), time: performance.now() });
 });
 canvas.addEventListener('pointerup', e => {
@@ -715,21 +721,21 @@ canvas.addEventListener('pointerup', e => {
   mouseDown = false;
   activePointerId = null;
   resetStrokeState();
-  if (fingerCursor) fingerCursor.style.display = 'none';
+  waterCursor.hide();
 });
 canvas.addEventListener('pointercancel', e => {
   if (activePointerId !== null && e.pointerId !== activePointerId) return;
   mouseDown = false;
   activePointerId = null;
   resetStrokeState();
-  if (fingerCursor) fingerCursor.style.display = 'none';
+  waterCursor.hide();
 });
 canvas.addEventListener('pointerleave', e => {
   if (activePointerId !== null && e.pointerId !== activePointerId) return;
   mouseDown = false;
   activePointerId = null;
   resetStrokeState();
-  if (fingerCursor) fingerCursor.style.display = 'none';
+  waterCursor.hide();
 });
 
 // ── Scroll zoom ───────────────────────────────────────────────────────────────
@@ -805,7 +811,7 @@ function animate() {
     gpgpu.uniforms.u_waterLoad.value = waterAmount;
 
     if (isPainting) {
-      updateFingerCursor(indexTip.x, indexTip.y, true);
+      moveCursor(indexTip.x, indexTip.y, true);
       if (!wasPainting) resetStrokeState();
       doPaint(indexTip.x, indexTip.y, {
         pressure: THREE.MathUtils.clamp(0.48 + brushDepth * 0.52, 0.08, 1.0),
@@ -827,11 +833,11 @@ function animate() {
       if (wasPainting) resetStrokeState();
       handStillTimer = 0;
       gpgpu.velUniforms.u_gravity.value.y = BASE_GRAVITY;
-      if (!mouseDown && fingerCursor) fingerCursor.style.display = 'none';
+      if (!mouseDown) waterCursor.hide();
     }
     wasPainting = isPainting;
   } else {
-    if (!mouseDown && fingerCursor) fingerCursor.style.display = 'none';
+    if (!mouseDown) waterCursor.hide();
   }
 
   // ── Burst animation (firework spiral) ──────────────────────────────────────

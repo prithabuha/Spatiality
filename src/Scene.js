@@ -253,6 +253,17 @@ export class Scene {
     });
   }
 
+  // Hide or show the floating 3D colour-bucket spheres + their glow lights.
+  // Call setBucketsVisible(false) when DiegeticUI takes over colour selection.
+  setBucketsVisible(visible) {
+    this._colorBuckets.forEach(sphere => {
+      sphere.visible = visible;
+      if (sphere.userData.glowLight) {
+        sphere.userData.glowLight.visible = visible;
+      }
+    });
+  }
+
   // Returns { color, sphere } of the bucket hit by screen-pos ray, or null.
   getColorBucketHit(normX, normY) {
     this._rayNDC.set(normX * 2.0 - 1.0, -normY * 2.0 + 1.0);
