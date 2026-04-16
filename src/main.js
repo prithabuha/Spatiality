@@ -14,51 +14,51 @@
  *   Device tilt           → gravity drip direction (IMU)
  */
 
-import * as THREE          from 'three';
+import * as THREE from 'three';
 import { GPGPUWatercolor } from './GPGPUWatercolor.js';
-import { Scene }           from './Scene.js';
-import { HandTracker }     from './HandTracker.js';
+import { Scene } from './Scene.js';
+import { HandTracker } from './HandTracker.js';
 
 // ── DOM ──────────────────────────────────────────────────────────────────────
-const canvas       = document.getElementById('three-canvas');
-const webcamBg     = document.getElementById('webcam-bg');
-const handOverlay  = document.getElementById('hand-overlay');
-const hintChip     = document.getElementById('hint-chip');
+const canvas = document.getElementById('three-canvas');
+const webcamBg = document.getElementById('webcam-bg');
+const handOverlay = document.getElementById('hand-overlay');
+const hintChip = document.getElementById('hint-chip');
 const fingerCursor = document.getElementById('finger-cursor');
 const brushLabToggle = document.getElementById('brush-lab-toggle');
 const brushLab = document.getElementById('brush-lab');
 
 // ── God Mode elements ─────────────────────────────────────────────────────────
 const godModeToggle = document.getElementById('god-mode-toggle');
-const godModePanel  = document.getElementById('god-mode');
+const godModePanel = document.getElementById('god-mode');
 const gmSliders = {
-  size:      document.getElementById('gm-size'),
-  pigment:   document.getElementById('gm-pigment'),
-  splat:     document.getElementById('gm-splat'),
-  wetness:   document.getElementById('gm-wetness'),
+  size: document.getElementById('gm-size'),
+  pigment: document.getElementById('gm-pigment'),
+  splat: document.getElementById('gm-splat'),
+  wetness: document.getElementById('gm-wetness'),
   diffusion: document.getElementById('gm-diffusion'),
-  mix:       document.getElementById('gm-mix'),
-  gravity:   document.getElementById('gm-gravity'),
+  mix: document.getElementById('gm-mix'),
+  gravity: document.getElementById('gm-gravity'),
   wetwindow: document.getElementById('gm-wetwindow'),
-  evap:      document.getElementById('gm-evap'),
-  edge:      document.getElementById('gm-edge'),
-  grain:     document.getElementById('gm-grain'),
-  backrun:    document.getElementById('gm-backrun'),
+  evap: document.getElementById('gm-evap'),
+  edge: document.getElementById('gm-edge'),
+  grain: document.getElementById('gm-grain'),
+  backrun: document.getElementById('gm-backrun'),
   borderblur: document.getElementById('gm-borderblur'),
 };
 const gmValues = {
-  size:      document.getElementById('gv-size'),
-  pigment:   document.getElementById('gv-pigment'),
-  splat:     document.getElementById('gv-splat'),
-  wetness:   document.getElementById('gv-wetness'),
+  size: document.getElementById('gv-size'),
+  pigment: document.getElementById('gv-pigment'),
+  splat: document.getElementById('gv-splat'),
+  wetness: document.getElementById('gv-wetness'),
   diffusion: document.getElementById('gv-diffusion'),
-  mix:       document.getElementById('gv-mix'),
-  gravity:   document.getElementById('gv-gravity'),
+  mix: document.getElementById('gv-mix'),
+  gravity: document.getElementById('gv-gravity'),
   wetwindow: document.getElementById('gv-wetwindow'),
-  evap:      document.getElementById('gv-evap'),
-  edge:      document.getElementById('gv-edge'),
-  grain:     document.getElementById('gv-grain'),
-  backrun:    document.getElementById('gv-backrun'),
+  evap: document.getElementById('gv-evap'),
+  edge: document.getElementById('gv-edge'),
+  grain: document.getElementById('gv-grain'),
+  backrun: document.getElementById('gv-backrun'),
   borderblur: document.getElementById('gv-borderblur'),
 };
 const brushPresetSelect = document.getElementById('brush-preset');
@@ -77,10 +77,10 @@ const brushSmoothingValue = document.getElementById('brush-smoothing-value');
 
 function getPerformanceProfile() {
   const profiles = {
-    projection: { pixelRatioCap: 4.0,  simResolution: 1024, antialias: true  }, // 4K projector
-    high:       { pixelRatioCap: 2.0,  simResolution: 768,  antialias: true  },
-    balanced:   { pixelRatioCap: 1.5,  simResolution: 512,  antialias: true  },
-    fast:       { pixelRatioCap: 1.25, simResolution: 384,  antialias: false },
+    projection: { pixelRatioCap: 4.0, simResolution: 1024, antialias: true }, // 4K projector
+    high: { pixelRatioCap: 2.0, simResolution: 768, antialias: true },
+    balanced: { pixelRatioCap: 1.5, simResolution: 512, antialias: true },
+    fast: { pixelRatioCap: 1.25, simResolution: 384, antialias: false },
   };
 
   const qualityParam = new URLSearchParams(window.location.search)
@@ -97,7 +97,7 @@ function getPerformanceProfile() {
   }
 
   const cores = navigator.hardwareConcurrency ?? 4;
-  const mem   = navigator.deviceMemory ?? 4;
+  const mem = navigator.deviceMemory ?? 4;
   const coarsePointer = window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
 
   if (cores <= 4 || mem <= 3 || coarsePointer) {
@@ -122,8 +122,8 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 canvas.style.touchAction = 'none';
 
 // ── GPGPU + Scene ─────────────────────────────────────────────────────────────
-const gpgpu   = new GPGPUWatercolor(renderer, { simResolution: perfProfile.simResolution });
-const scene   = new Scene(renderer, gpgpu);
+const gpgpu = new GPGPUWatercolor(renderer, { simResolution: perfProfile.simResolution });
+const scene = new Scene(renderer, gpgpu);
 const tracker = new HandTracker(webcamBg, handOverlay);
 
 console.info(
@@ -219,9 +219,9 @@ const brushPresets = {
 let activePresetKey = 'fresco';
 const brushState = { ...brushPresets[activePresetKey] };
 
-let brushSize   = brushState.size;
+let brushSize = brushState.size;
 let waterAmount = brushState.water;
-let lastUV      = null;
+let lastUV = null;
 let lastSurface = null;
 let lastPaintPoint = null;
 let lastPaintTs = performance.now();
@@ -335,44 +335,44 @@ function applyGodMode() {
   }
 
   // Brush geometry
-  brushState.size     = v.size;
-  brushState.pigment  = v.pigment;
+  brushState.size = v.size;
+  brushState.pigment = v.pigment;
   brushState.splatSpread = v.splat;
 
   // Flow
   brushState.diffusion = v.diffusion;
-  brushState.colorMix  = v.mix;
+  brushState.colorMix = v.mix;
 
   // Simulation engine
   gpgpu.backgroundWetness = v.wetness;
-  gpgpu.wetDuration        = v.wetwindow;
-  gpgpu.evaporationRate    = v.evap;
+  gpgpu.wetDuration = v.wetwindow;
+  gpgpu.evaporationRate = v.evap;
 
   // Gravity — negative Y is downward
   gpgpu.velUniforms.u_gravity.value.y = -v.gravity;
 
   // Shader multipliers
-  brushState.edgeStrength        = v.edge;
+  brushState.edgeStrength = v.edge;
   brushState.granulationStrength = v.grain;
-  brushState.backrunStrength     = v.backrun;
+  brushState.backrunStrength = v.backrun;
 
   // Surface uniforms applied directly to all paint meshes
   // scene.setPaintUniform('u_borderBlur', v.borderblur);
-   scene.setPaintUniform('u_borderBlur', 0.0);
+  scene.setPaintUniform('u_borderBlur', 0.0);
 
   // Update display values
-  if (gmValues.size)      gmValues.size.textContent      = v.size.toFixed(3);
-  if (gmValues.pigment)   gmValues.pigment.textContent   = v.pigment.toFixed(2);
-  if (gmValues.splat)     gmValues.splat.textContent     = v.splat.toFixed(2);
-  if (gmValues.wetness)   gmValues.wetness.textContent   = v.wetness.toFixed(2);
+  if (gmValues.size) gmValues.size.textContent = v.size.toFixed(3);
+  if (gmValues.pigment) gmValues.pigment.textContent = v.pigment.toFixed(2);
+  if (gmValues.splat) gmValues.splat.textContent = v.splat.toFixed(2);
+  if (gmValues.wetness) gmValues.wetness.textContent = v.wetness.toFixed(2);
   if (gmValues.diffusion) gmValues.diffusion.textContent = v.diffusion.toFixed(2);
-  if (gmValues.mix)       gmValues.mix.textContent       = v.mix.toFixed(2);
-  if (gmValues.gravity)   gmValues.gravity.textContent   = v.gravity.toFixed(2);
+  if (gmValues.mix) gmValues.mix.textContent = v.mix.toFixed(2);
+  if (gmValues.gravity) gmValues.gravity.textContent = v.gravity.toFixed(2);
   if (gmValues.wetwindow) gmValues.wetwindow.textContent = v.wetwindow.toFixed(2) + 's';
-  if (gmValues.evap)      gmValues.evap.textContent      = v.evap.toFixed(2) + 'x';
-  if (gmValues.edge)      gmValues.edge.textContent      = v.edge.toFixed(2);
-  if (gmValues.grain)     gmValues.grain.textContent     = v.grain.toFixed(2);
-  if (gmValues.backrun)    gmValues.backrun.textContent    = v.backrun.toFixed(2);
+  if (gmValues.evap) gmValues.evap.textContent = v.evap.toFixed(2) + 'x';
+  if (gmValues.edge) gmValues.edge.textContent = v.edge.toFixed(2);
+  if (gmValues.grain) gmValues.grain.textContent = v.grain.toFixed(2);
+  if (gmValues.backrun) gmValues.backrun.textContent = v.backrun.toFixed(2);
   if (gmValues.borderblur) gmValues.borderblur.textContent = v.borderblur.toFixed(2);
 }
 
@@ -416,25 +416,25 @@ const DRIP_GRAVITY = -0.24;
 
 // ── Firework burst emitter ────────────────────────────────────────────────────
 let burstActive = false;
-let burstTimer  = 0;
-let burstUV     = null;
-let burstColor  = null;
+let burstTimer = 0;
+let burstUV = null;
+let burstColor = null;
 const BURST_DURATION = 0.50;
 
 function triggerBurst(u, v, color) {
   burstActive = true;
-  burstTimer  = BURST_DURATION;
-  burstUV     = { u, v };
-  burstColor  = color.clone();
+  burstTimer = BURST_DURATION;
+  burstUV = { u, v };
+  burstColor = color.clone();
   // Immediate large splatter at pickup point
   gpgpu.paint(u, v, {
-    color:        burstColor,
-    pigmentLoad:  1.0,
-    waterAmount:  0.65,
-    brushSize:    0.13,
-    brushType:    2,
+    color: burstColor,
+    pigmentLoad: 1.0,
+    waterAmount: 0.65,
+    brushSize: 0.13,
+    brushType: 2,
     screenAspect: 1.0,
-    wetCanvas:    true,
+    wetCanvas: true,
   });
 }
 
@@ -449,8 +449,8 @@ function _getAudio() {
 
 function playColorPop() {
   try {
-    const ctx  = _getAudio();
-    const osc  = ctx.createOscillator();
+    const ctx = _getAudio();
+    const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -462,13 +462,13 @@ function playColorPop() {
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.20);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.20);
-  } catch (_) {}
+  } catch (_) { }
 }
 
 function playWaveSound() {
   try {
-    const ctx  = _getAudio();
-    const osc  = ctx.createOscillator();
+    const ctx = _getAudio();
+    const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -480,7 +480,7 @@ function playWaveSound() {
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.60);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.60);
-  } catch (_) {}
+  } catch (_) { }
 }
 
 // ── Haptic helper ─────────────────────────────────────────────────────────────
@@ -491,16 +491,16 @@ function haptic(pattern = [30]) {
 // ── Finger cursor ─────────────────────────────────────────────────────────────
 function updateFingerCursor(normX, normY, active) {
   if (!fingerCursor) return;
-  const sz  = Math.round(brushSize * 520 + 14);
+  const sz = Math.round(brushSize * 520 + 14);
   const hex = '#' + activeColor.getHexString();
-  fingerCursor.style.display     = 'block';
-  fingerCursor.style.left        = normX * window.innerWidth  + 'px';
-  fingerCursor.style.top         = normY * window.innerHeight + 'px';
-  fingerCursor.style.width       = sz + 'px';
-  fingerCursor.style.height      = sz + 'px';
-  fingerCursor.style.color       = hex;
+  fingerCursor.style.display = 'block';
+  fingerCursor.style.left = normX * window.innerWidth + 'px';
+  fingerCursor.style.top = normY * window.innerHeight + 'px';
+  fingerCursor.style.width = sz + 'px';
+  fingerCursor.style.height = sz + 'px';
+  fingerCursor.style.color = hex;
   fingerCursor.style.borderColor = active ? hex : 'rgba(160,120,40,0.5)';
-  fingerCursor.style.boxShadow   = active ? `0 0 ${sz * 0.7}px ${hex}66` : 'none';
+  fingerCursor.style.boxShadow = active ? `0 0 ${sz * 0.7}px ${hex}66` : 'none';
 }
 
 // ── Core paint dispatch ───────────────────────────────────────────────────────
@@ -522,8 +522,8 @@ function doPaint(normX, normY, input = {}) {
       haptic([25, 10, 25]);
       const r = bucketColor.r, b = bucketColor.b;
       const label = r > 0.7 && b < 0.3 ? 'Red'
-                  : b > 0.7 && r < 0.3 ? 'Blue'
-                  : 'Yellow';
+        : b > 0.7 && r < 0.3 ? 'Blue'
+          : 'Yellow';
       flashHint(`${label} paint!`);
     }
     resetStrokeState();
@@ -593,21 +593,9 @@ function doPaint(normX, normY, input = {}) {
     0.0,
     0.85
   );
-  const dynamicEdgeStrength = THREE.MathUtils.clamp(
-    (brushState.edgeStrength ?? 1.0) * (0.90 + (1.0 - dynamicWater) * 0.28),
-    0.55,
-    1.45
-  );
-  const dynamicGranulation = THREE.MathUtils.clamp(
-    (brushState.granulationStrength ?? 1.0) * (0.84 + (1.0 - dynamicWater) * 0.32),
-    0.50,
-    1.55
-  );
-  const dynamicBackrun = THREE.MathUtils.clamp(
-    (brushState.backrunStrength ?? 1.0) * (0.74 + dynamicWater * 0.50),
-    0.45,
-    1.45
-  );
+  const dynamicEdgeStrength = 0.0;
+  const dynamicGranulation = 0.25; // keep little texture
+  const dynamicBackrun = 0.0;
   const dynamicRetention = THREE.MathUtils.clamp(
     (brushState.retentionStrength ?? 1.0) * (0.92 + dynamicWater * 0.16),
     0.70,
@@ -646,7 +634,7 @@ function doPaint(normX, normY, input = {}) {
   // Notify drying engine: this frame has a live stroke — resets global clock
   gpgpu.notifyStroke();
 
-  if (lastUV && lastSurface === hit.surfaceId) {
+  if (lastUV) {
     const dist = Math.hypot(hit.u - lastUV.u, hit.v - lastUV.v);
     const steps = dist < 0.0012
       ? 1
@@ -696,7 +684,7 @@ canvas.addEventListener('pointerdown', e => {
   activePointerId = e.pointerId;
   mouseDown = true;
   resetStrokeState();
-  try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) { }
   doPaint(
     e.clientX / window.innerWidth,
     e.clientY / window.innerHeight,
@@ -743,9 +731,9 @@ canvas.addEventListener('wheel', e => {
 // ── IMU gravity — phone tilt drives paint drip ────────────────────────────────
 const imuGravity = gpgpu.velUniforms.u_gravity.value;
 function handleOrientation(e) {
-  const roll  = ((e.gamma || 0) * Math.PI) / 180;
-  const pitch = ((e.beta  || 0) * Math.PI) / 180;
-  imuGravity.x =  Math.sin(roll)  * 0.45;
+  const roll = ((e.gamma || 0) * Math.PI) / 180;
+  const pitch = ((e.beta || 0) * Math.PI) / 180;
+  imuGravity.x = Math.sin(roll) * 0.45;
   imuGravity.y = -Math.sin(pitch) * 0.45;
 }
 if (window.DeviceOrientationEvent) {
@@ -753,7 +741,7 @@ if (window.DeviceOrientationEvent) {
     document.addEventListener('pointerup', () => {
       DeviceOrientationEvent.requestPermission()
         .then(s => { if (s === 'granted') window.addEventListener('deviceorientation', handleOrientation); })
-        .catch(() => {});
+        .catch(() => { });
     }, { once: true });
   } else {
     window.addEventListener('deviceorientation', handleOrientation, { passive: true });
@@ -781,7 +769,7 @@ const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
 
-  const dt      = clock.getDelta();
+  const dt = clock.getDelta();
   const elapsed = clock.getElapsedTime();
 
   scene.camera.position.z += (camZ - scene.camera.position.z) * 0.08;
@@ -838,19 +826,19 @@ function animate() {
   // ── Burst animation (firework spiral) ──────────────────────────────────────
   if (burstActive && burstTimer > 0) {
     burstTimer -= dt;
-    const t      = 1 - (burstTimer / BURST_DURATION);
-    const angle  = t * Math.PI * 9;
+    const t = 1 - (burstTimer / BURST_DURATION);
+    const angle = t * Math.PI * 9;
     const radius = t * 0.08;
     gpgpu.notifyStroke();  // burst counts as active painting — keep wet
     gpgpu.paint(
       burstUV.u + Math.cos(angle) * radius,
       burstUV.v + Math.sin(angle) * radius,
       {
-        color:        burstColor,
-        pigmentLoad:  0.90 * (1 - t * 0.65),
-        waterAmount:  0.45,
-        brushSize:    0.028 + t * 0.022,
-        brushType:    2,
+        color: burstColor,
+        pigmentLoad: 0.90 * (1 - t * 0.65),
+        waterAmount: 0.45,
+        brushSize: 0.028 + t * 0.022,
+        brushType: 2,
         screenAspect: 1.0,
       }
     );

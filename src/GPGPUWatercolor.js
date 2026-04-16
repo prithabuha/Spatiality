@@ -111,7 +111,7 @@ export class GPGPUWatercolor {
       u_resolution: { value: new THREE.Vector2(simRes, simRes) },
       u_dt:         { value: 0.016 },
       u_brushUV:    { value: new THREE.Vector2(0.5, 0.5) },
-      u_color:      { value: new THREE.Vector3(0.23, 0.48, 0.85) },
+      u_color:      { value: new THREE.Vector3(0.15, 0.35, 0.75) },
       u_brushRadius:{ value: 0.04 },
       u_pigmentLoad:{ value: 0.60 },
       u_waterAmount:{ value: 0.25 },
