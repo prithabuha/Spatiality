@@ -56,16 +56,9 @@ export class DiegeticUI {
         font-family: 'Varela Round', 'Segoe UI Rounded', sans-serif !important;
       }
 
-      /* Hint chip: move above palette + ink-style offset shadow */
+      /* Hint chip: positioned above palette — matches dark studio theme */
       #hint-chip {
         bottom: 175px !important;
-        text-shadow: 2px 3px 0 rgba(90, 50, 5, 0.22) !important;
-        box-shadow: 0 4px 18px rgba(150, 90, 10, 0.10) !important;
-      }
-
-      /* God Mode / Brush Lab toggle buttons — rounded ink shadow */
-      #god-mode-toggle, #brush-lab-toggle {
-        text-shadow: 1px 2px 0 rgba(0,0,0,0.25);
       }
 
       /* ── Palette board ───────────────────────────────────────────────── */

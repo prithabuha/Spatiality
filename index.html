@@ -13,7 +13,7 @@
 
     body {
       overflow: hidden;
-      background: #f5f5f5;
+      background: #0e0b06;
       font-family: 'Varela Round', 'Segoe UI Rounded', system-ui, sans-serif;
     }
 
@@ -40,141 +40,346 @@
       position: absolute; bottom: 14px; right: 14px;
       width: 130px; height: 98px;
       border-radius: 14px; overflow: hidden;
-      border: 3px solid rgba(200, 150, 60, 0.40);
+      border: 1.5px solid rgba(180, 130, 60, 0.28);
       z-index: 10;
-      box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+      box-shadow:
+        0 4px 20px rgba(0, 0, 0, 0.50),
+        0 0 0 1px rgba(200, 150, 70, 0.06);
     }
     #webcam-bg {
       width: 100%; height: 100%;
       object-fit: cover; transform: scaleX(-1);
     }
 
-    /* ── Hint chip — sits above diegetic palette, soft ink shadow ──────── */
+    /* ── Hint chip ─────────────────────────────────────────────────────── */
     #hint-chip {
       position: absolute;
       bottom: 175px; left: 50%; transform: translateX(-50%);
-      background: rgba(255, 248, 232, 0.90);
-      backdrop-filter: blur(12px);
-      border: 1.5px solid rgba(180, 120, 30, 0.28);
-      border-radius: 28px;
-      padding: 9px 28px;
+      background: rgba(16, 11, 5, 0.82);
+      backdrop-filter: blur(16px) saturate(1.3);
+      -webkit-backdrop-filter: blur(16px) saturate(1.3);
+      border: 1px solid rgba(180, 130, 55, 0.22);
+      border-radius: 999px;
+      padding: 9px 26px;
       font-family: 'Varela Round', sans-serif;
-      font-size: 13.5px;
-      color: #8a4808;
+      font-size: 13px;
+      color: rgba(215, 175, 105, 0.90);
       z-index: 20; pointer-events: none;
       white-space: nowrap;
-      /* Offset ink shadow instead of heavy floating shadow */
-      box-shadow: 2px 3px 0 rgba(90,50,5,0.10), 0 6px 18px rgba(140,80,10,0.10);
-      text-shadow: 1px 2px 0 rgba(80,40,0,0.16);
+      box-shadow:
+        0 8px 28px rgba(0, 0, 0, 0.40),
+        inset 0 1px 0 rgba(220, 160, 70, 0.10);
       letter-spacing: 0.3px;
     }
 
-    /* ── Brush Lab (hybrid UI) ─────────────────────────────────────────── */
-    #brush-lab-toggle {
+    /* ── Toggle Buttons — unified pill style ──────────────────────────── */
+    #brush-lab-toggle,
+    #god-mode-toggle {
       position: absolute;
       top: 14px;
-      left: 14px;
       z-index: 24;
-      border: 0;
+      border: 1px solid rgba(195, 145, 65, 0.32);
       border-radius: 999px;
-      padding: 10px 16px;
-      font-size: 13px;
+      padding: 10px 18px;
+      font-family: 'Varela Round', sans-serif;
+      font-size: 11px;
       font-weight: 700;
-      letter-spacing: 0.2px;
-      color: #f8efe2;
-      background: linear-gradient(135deg, #3c4d64, #556f8c);
-      box-shadow: 0 8px 28px rgba(24, 40, 60, 0.35);
+      letter-spacing: 0.9px;
+      text-transform: uppercase;
+      color: rgba(228, 185, 115, 0.95);
+      background: linear-gradient(
+        145deg,
+        rgba(22, 15, 6, 0.96),
+        rgba(32, 22, 8, 0.92)
+      );
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow:
+        0 6px 20px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(220, 160, 75, 0.14),
+        inset 0 0 0 1px rgba(200, 145, 55, 0.06);
       cursor: pointer;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
     }
+    #brush-lab-toggle:hover,
+    #god-mode-toggle:hover {
+      border-color: rgba(215, 165, 75, 0.52);
+      color: rgba(245, 205, 135, 1.0);
+      box-shadow:
+        0 6px 20px rgba(0, 0, 0, 0.50),
+        0 0 18px rgba(170, 115, 35, 0.22),
+        inset 0 1px 0 rgba(235, 175, 85, 0.20),
+        inset 0 0 0 1px rgba(210, 155, 60, 0.10);
+    }
+    #brush-lab-toggle { left: 14px; }
+    #god-mode-toggle  { right: 14px; }
 
-    #brush-lab {
+    /* ── Panels — unified glassmorphic dark card ───────────────────────── */
+    #brush-lab,
+    #god-mode {
       position: absolute;
-      top: 58px;
-      left: 14px;
-      width: 290px;
       z-index: 23;
-      border-radius: 16px;
-      border: 1px solid rgba(48, 70, 94, 0.24);
+      border-radius: 18px;
+      border: 1px solid rgba(180, 130, 55, 0.17);
       background:
-        radial-gradient(circle at 12% 0%, rgba(120, 165, 205, 0.18), transparent 45%),
-        linear-gradient(160deg, rgba(255, 250, 241, 0.95), rgba(248, 241, 228, 0.92));
-      backdrop-filter: blur(12px);
-      box-shadow: 0 16px 40px rgba(24, 40, 60, 0.20);
-      padding: 14px;
+        radial-gradient(ellipse at 14% 0%, rgba(195, 140, 50, 0.07) 0%, transparent 52%),
+        linear-gradient(158deg, rgba(22, 15, 6, 0.96), rgba(16, 11, 5, 0.94));
+      backdrop-filter: blur(20px) saturate(1.4);
+      -webkit-backdrop-filter: blur(20px) saturate(1.4);
+      box-shadow:
+        0 22px 52px rgba(0, 0, 0, 0.60),
+        0 6px 18px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(220, 165, 70, 0.11),
+        inset 0 0 0 1px rgba(200, 150, 55, 0.04);
+      padding: 16px;
       transition: opacity .18s ease, transform .18s ease;
     }
 
-    #brush-lab.is-collapsed {
+    #brush-lab {
+      top: 58px;
+      left: 14px;
+      width: 292px;
+    }
+
+    #god-mode {
+      top: 58px;
+      right: 14px;
+      width: 304px;
+      max-height: 88vh;
+      overflow-y: auto;
+    }
+
+    #god-mode::-webkit-scrollbar { width: 3px; }
+    #god-mode::-webkit-scrollbar-track { background: transparent; }
+    #god-mode::-webkit-scrollbar-thumb {
+      background: rgba(195, 130, 40, 0.28);
+      border-radius: 3px;
+    }
+
+    #brush-lab.is-collapsed,
+    #god-mode.is-collapsed {
       opacity: 0;
-      transform: translateY(-8px) scale(0.97);
+      transform: translateY(-10px) scale(0.97);
       pointer-events: none;
     }
 
-    .lab-head {
+    /* ── Panel headers ─────────────────────────────────────────────────── */
+    .lab-head,
+    .god-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 8px;
-      color: #4c5d70;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(180, 130, 52, 0.14);
     }
 
-    .lab-head strong {
-      font-size: 13px;
-      letter-spacing: 0.3px;
-      text-transform: uppercase;
-    }
-
-    .lab-head span {
+    .lab-head strong,
+    .god-head strong {
       font-size: 11px;
-      font-weight: 700;
-      color: #73879c;
+      font-weight: 800;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: rgba(218, 173, 98, 0.96);
     }
 
+    .lab-head span,
+    .god-head span {
+      font-size: 10px;
+      font-weight: 600;
+      color: rgba(140, 100, 42, 0.72);
+      letter-spacing: 0.4px;
+    }
+
+    /* ── Brush Lab rows ────────────────────────────────────────────────── */
     .lab-row {
       display: grid;
-      grid-template-columns: 92px 1fr auto;
+      grid-template-columns: 84px 1fr 44px;
       align-items: center;
-      gap: 8px;
-      margin-top: 8px;
-      color: #55606f;
-      font-size: 12px;
+      gap: 10px;
+      margin-top: 10px;
+      color: rgba(208, 172, 118, 0.90);
+      font-size: 11.5px;
       font-weight: 600;
+      letter-spacing: 0.2px;
     }
 
-    .lab-row input[type='range'] {
-      accent-color: #4f87ad;
-      width: 100%;
+    .lab-value {
+      text-align: right;
+      font-size: 10.5px;
+      color: rgba(185, 140, 70, 0.78);
+      font-variant-numeric: tabular-nums;
+      font-family: 'Courier New', monospace;
     }
 
     .lab-row input[type='color'] {
       width: 100%;
-      height: 30px;
-      border: 1px solid rgba(67, 97, 122, 0.28);
+      height: 28px;
+      border: 1px solid rgba(180, 130, 52, 0.24);
       border-radius: 8px;
-      background: #fff;
-      padding: 0;
+      background: rgba(20, 14, 6, 0.60);
+      padding: 2px;
       cursor: pointer;
     }
 
     .lab-row select {
       width: 100%;
-      height: 30px;
+      height: 28px;
       border-radius: 8px;
-      border: 1px solid rgba(67, 97, 122, 0.28);
-      background: rgba(255, 255, 255, 0.85);
-      color: #33485f;
+      border: 1px solid rgba(175, 128, 50, 0.22);
+      background: rgba(18, 13, 5, 0.85);
+      color: rgba(208, 172, 118, 0.95);
+      font-family: 'Varela Round', sans-serif;
+      font-size: 11px;
       font-weight: 600;
       padding: 0 8px;
     }
 
-    .lab-value {
-      width: 40px;
-      text-align: right;
-      font-size: 11px;
-      color: #6a7f93;
-      font-variant-numeric: tabular-nums;
+    /* ── God Mode section dividers & labels ────────────────────────────── */
+    .god-section {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(175, 128, 50, 0.10);
     }
 
+    .god-section-label {
+      font-size: 9.5px;
+      font-weight: 800;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+      color: rgba(148, 105, 38, 0.68);
+      margin-bottom: 8px;
+    }
+
+    /* ── God Mode rows ─────────────────────────────────────────────────── */
+    .god-row {
+      display: grid;
+      grid-template-columns: 100px 1fr 46px;
+      align-items: center;
+      gap: 10px;
+      margin-top: 9px;
+    }
+
+    .god-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(208, 172, 118, 0.92);
+      line-height: 1.30;
+      letter-spacing: 0.1px;
+    }
+
+    .god-label small {
+      display: block;
+      font-size: 9px;
+      font-weight: 500;
+      color: rgba(138, 98, 40, 0.62);
+      letter-spacing: 0.2px;
+      margin-top: 1px;
+    }
+
+    .god-value {
+      text-align: right;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: rgba(212, 162, 76, 0.90);
+      font-variant-numeric: tabular-nums;
+      font-family: 'Courier New', monospace;
+    }
+
+    /* ── Unified slider — both panels ──────────────────────────────────── */
+    .lab-row input[type='range'],
+    .god-row input[type='range'] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 4px;
+      background: rgba(175, 125, 46, 0.16);
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Thumb — shared radial amber gem */
+    .lab-row input[type='range']::-webkit-slider-thumb,
+    .god-row input[type='range']::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 34% 34%, #ffd580, #c47600);
+      box-shadow:
+        0 0 5px rgba(195, 128, 20, 0.48),
+        0 1px 4px rgba(0, 0, 0, 0.52);
+      cursor: pointer;
+      transition: box-shadow 0.15s ease;
+    }
+    .lab-row input[type='range']:hover::-webkit-slider-thumb,
+    .god-row input[type='range']:hover::-webkit-slider-thumb {
+      box-shadow:
+        0 0 10px rgba(215, 148, 28, 0.68),
+        0 1px 5px rgba(0, 0, 0, 0.50);
+    }
+
+    .lab-row input[type='range']::-moz-range-thumb,
+    .god-row input[type='range']::-moz-range-thumb {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 34% 34%, #ffd580, #c47600);
+      border: none;
+      cursor: pointer;
+    }
+
+    /* ── God Mode reset button ─────────────────────────────────────────── */
+    .god-reset-btn {
+      margin-top: 14px;
+      width: 100%;
+      padding: 9px;
+      border: 1px solid rgba(175, 128, 50, 0.26);
+      border-radius: 10px;
+      background: rgba(175, 118, 28, 0.09);
+      color: rgba(195, 150, 75, 0.82);
+      font-family: 'Varela Round', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.4px;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .god-reset-btn:hover {
+      background: rgba(195, 138, 38, 0.17);
+      border-color: rgba(200, 148, 60, 0.42);
+    }
+
+    /* ── Orb touch ripple rings ─────────────────────────────────────────── */
+    @keyframes orbRipple {
+      0%   {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+        border-width: 4px;
+      }
+      60%  {
+        opacity: 0.5;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(5.5);
+        opacity: 0;
+        border-width: 1px;
+      }
+    }
+
+    .orb-ripple {
+      position: fixed;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 4px solid currentColor;
+      pointer-events: none;
+      z-index: 50;
+      animation: orbRipple 0.72s cubic-bezier(0.05, 0.45, 0.35, 1.0) forwards;
+    }
+
+    /* ── Responsive ────────────────────────────────────────────────────── */
     @media (max-width: 720px) {
       #brush-lab-toggle {
         top: 10px;
@@ -199,206 +404,6 @@
         right: 10px;
         width: min(92vw, 310px);
       }
-    }
-
-    /* ── God Mode Panel ───────────────────────────────────────────────────── */
-    #god-mode-toggle {
-      position: absolute;
-      top: 14px;
-      right: 14px;
-      z-index: 24;
-      border: 0;
-      border-radius: 999px;
-      padding: 10px 16px;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.2px;
-      color: #fff8e8;
-      background: linear-gradient(135deg, #7c3700, #c46200);
-      box-shadow: 0 8px 28px rgba(180, 80, 0, 0.45);
-      cursor: pointer;
-    }
-
-    #god-mode {
-      position: absolute;
-      top: 58px;
-      right: 14px;
-      width: 300px;
-      z-index: 23;
-      border-radius: 16px;
-      border: 1px solid rgba(200, 120, 20, 0.30);
-      background:
-        radial-gradient(circle at 88% 0%, rgba(220, 140, 30, 0.14), transparent 45%),
-        linear-gradient(160deg, rgba(30, 20, 10, 0.94), rgba(20, 14, 6, 0.92));
-      backdrop-filter: blur(14px);
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(220, 140, 30, 0.12);
-      padding: 14px;
-      transition: opacity .18s ease, transform .18s ease;
-      max-height: 88vh;
-      overflow-y: auto;
-    }
-
-    #god-mode::-webkit-scrollbar { width: 4px; }
-    #god-mode::-webkit-scrollbar-track { background: transparent; }
-    #god-mode::-webkit-scrollbar-thumb { background: rgba(200,120,20,0.4); border-radius: 4px; }
-
-    #god-mode.is-collapsed {
-      opacity: 0;
-      transform: translateY(-8px) scale(0.97);
-      pointer-events: none;
-    }
-
-    .god-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 10px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid rgba(200, 120, 20, 0.22);
-    }
-
-    .god-head strong {
-      font-size: 13px;
-      font-weight: 800;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-      color: #f0a840;
-    }
-
-    .god-head span {
-      font-size: 10px;
-      font-weight: 700;
-      color: #a07030;
-      letter-spacing: 0.3px;
-    }
-
-    .god-section {
-      margin-top: 10px;
-      padding-top: 8px;
-      border-top: 1px solid rgba(200, 120, 20, 0.12);
-    }
-
-    .god-section-label {
-      font-size: 9px;
-      font-weight: 800;
-      letter-spacing: 1.2px;
-      text-transform: uppercase;
-      color: #8a6030;
-      margin-bottom: 6px;
-    }
-
-    .god-row {
-      display: grid;
-      grid-template-columns: 104px 1fr 44px;
-      align-items: center;
-      gap: 7px;
-      margin-top: 7px;
-    }
-
-    .god-label {
-      font-size: 11px;
-      font-weight: 600;
-      color: #d4a060;
-      line-height: 1.25;
-    }
-
-    .god-label small {
-      display: block;
-      font-size: 9px;
-      font-weight: 500;
-      color: #6a4820;
-      letter-spacing: 0.2px;
-    }
-
-    .god-row input[type='range'] {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      height: 5px;
-      border-radius: 4px;
-      background: rgba(200, 120, 20, 0.18);
-      outline: none;
-      cursor: pointer;
-    }
-
-    .god-row input[type='range']::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 15px;
-      height: 15px;
-      border-radius: 50%;
-      background: radial-gradient(circle, #ffb84d, #d46c00);
-      box-shadow: 0 0 6px rgba(220, 140, 0, 0.6);
-      cursor: pointer;
-    }
-
-    .god-row input[type='range']::-moz-range-thumb {
-      width: 15px;
-      height: 15px;
-      border-radius: 50%;
-      background: radial-gradient(circle, #ffb84d, #d46c00);
-      border: none;
-      cursor: pointer;
-    }
-
-    .god-value {
-      text-align: right;
-      font-size: 11px;
-      font-weight: 700;
-      color: #f0a840;
-      font-variant-numeric: tabular-nums;
-      font-family: 'Courier New', monospace;
-    }
-
-    .god-reset-btn {
-      margin-top: 12px;
-      width: 100%;
-      padding: 8px;
-      border: 1px solid rgba(200, 120, 20, 0.35);
-      border-radius: 10px;
-      background: rgba(200, 120, 20, 0.12);
-      color: #d4a060;
-      font-size: 11px;
-      font-weight: 700;
-      cursor: pointer;
-      letter-spacing: 0.3px;
-      transition: background 0.15s;
-    }
-
-    .god-reset-btn:hover {
-      background: rgba(200, 120, 20, 0.25);
-    }
-
-    /* ── Colour-bucket labels (cosmetic, rendered in canvas via THREE) ─── */
-    /* No HTML panels, sliders, or buttons — everything is 3D + gesture    */
-
-    /* ── Orb touch ripple rings ─────────────────────────────────────────── */
-    /* Injected by Scene.triggerOrbRipple() on colour selection.            */
-    @keyframes orbRipple {
-      0%   {
-        transform: translate(-50%, -50%) scale(1);
-        opacity: 1;
-        border-width: 4px;
-      }
-      60%  {
-        opacity: 0.5;
-      }
-      100% {
-        transform: translate(-50%, -50%) scale(5.5);
-        opacity: 0;
-        border-width: 1px;
-      }
-    }
-
-    .orb-ripple {
-      position: fixed;
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      border: 4px solid currentColor;   /* colour set via JS style.color */
-      pointer-events: none;
-      z-index: 50;
-      animation: orbRipple 0.72s cubic-bezier(0.05, 0.45, 0.35, 1.0) forwards;
     }
   </style>
 </head>
