@@ -128,7 +128,14 @@ const gpgpu   = new GPGPUWatercolor(renderer, { simResolution: perfProfile.simRe
 const scene   = new Scene(renderer, gpgpu);
 const tracker = new HandTracker(webcamBg, handOverlay);
 
-// ── Diegetic UI + Water cursor ────────────────────────────────────────────────
+console.info(
+  `[Perf] profile=${perfProfile.name}, sim=${perfProfile.simResolution}, pixelRatioCap=${perfProfile.pixelRatioCap}`
+);
+
+// ── Painting state ────────────────────────────────────────────────────────────
+let activeColor = new THREE.Color(0.85, 0.19, 0.38);  // start Quinacridone Rose
+
+// ── Diegetic UI + Water cursor (after activeColor is defined) ─────────────────
 scene.setBucketsVisible(false);   // replace 3D orbs with HTML palette
 
 const diegeticUI = new DiegeticUI({
@@ -142,13 +149,6 @@ const diegeticUI = new DiegeticUI({
 
 const waterCursor = new WaterCursor();
 waterCursor.setColor(activeColor.r, activeColor.g, activeColor.b);
-
-console.info(
-  `[Perf] profile=${perfProfile.name}, sim=${perfProfile.simResolution}, pixelRatioCap=${perfProfile.pixelRatioCap}`
-);
-
-// ── Painting state ────────────────────────────────────────────────────────────
-let activeColor = new THREE.Color(0.85, 0.19, 0.38);  // start Quinacridone Rose
 
 const brushPresets = {
   fresco: {
