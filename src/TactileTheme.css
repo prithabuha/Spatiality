@@ -156,8 +156,32 @@ html, body {
 #god-mode-toggle:active {
   box-shadow: var(--neu-pressed);
 }
-#brush-lab-toggle { left: 14px; }
+/* Logo is 186px wide + 14px origin + 8px gap = 208px before Brush Lab toggle */
+#brush-lab-toggle { left: 208px; }
 #god-mode-toggle  { right: 14px; }
+
+/* ── Spatiality Logo — watercolor mark + wordmark ───────────────────────── */
+#spatiality-logo {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 24;
+  pointer-events: none;
+  /* Subtle drop so the logo lifts off the paper like a physical paint mark */
+  filter:
+    drop-shadow(0 2px 6px rgba(180, 40, 60, 0.10))
+    drop-shadow(0 1px 3px rgba(0, 0, 0, 0.06));
+}
+
+/* Blob group: very slow breathing — wet paint still settling on paper */
+#spatiality-logo .sp-blobs {
+  animation: sp-breathe 5.5s ease-in-out infinite;
+  transform-origin: 20px 19px;
+}
+@keyframes sp-breathe {
+  0%, 100% { opacity: 1.0;  transform: scale(1.000); }
+  50%       { opacity: 0.84; transform: scale(0.980); }
+}
 
 /* ── Panels — raised card on warm white ─────────────────────────────────── */
 #brush-lab,
@@ -171,7 +195,8 @@ html, body {
   padding: 18px;
   transition: opacity 0.20s ease, transform 0.20s ease;
 }
-#brush-lab { top: 58px; left: 14px; width: 292px; }
+/* Panel aligns under its toggle (208px from left, matching toggle) */
+#brush-lab { top: 58px; left: 208px; width: 292px; }
 #god-mode  { top: 58px; right: 14px; width: 304px; max-height: 88vh; overflow-y: auto; }
 
 #god-mode::-webkit-scrollbar { width: 3px; }
@@ -392,8 +417,15 @@ html, body {
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 720px) {
-  #brush-lab-toggle { top: 10px; left: 10px;  padding: 9px 14px; }
+  /* Logo scales down on small screens */
+  #spatiality-logo {
+    top: 10px; left: 10px;
+    width: 148px; height: 35px;
+  }
+  /* Brush Lab toggle tucks right of the smaller logo (148+10+6=164) */
+  #brush-lab-toggle { top: 10px; left: 168px; padding: 9px 14px; }
   #god-mode-toggle  { top: 10px; right: 10px; padding: 9px 14px; }
+  /* Panels: full-width from left edge on mobile */
   #brush-lab { top: 52px; left: 10px;  width: min(92vw, 310px); }
   #god-mode  { top: 52px; right: 10px; width: min(92vw, 310px); }
 }

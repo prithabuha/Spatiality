@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Paint World</title>
+  <title>Spatiality</title>
 
   <!-- Quicksand — rounded geometric sans-serif for the tactile paper theme -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -57,6 +57,84 @@
   <div id="webcam-mini">
     <video id="webcam-bg" autoplay playsinline muted></video>
   </div>
+
+  <!-- ── Spatiality Logo — watercolor mark + wordmark ──────────────────── -->
+  <!--
+    Design:
+      • Three pigment blobs (rose · indigo · gold) mirror the ink wells
+      • feTurbulence displacement gives each shape organic painted edges
+      • Layered Gaussian halos simulate watercolour pigment pooling on paper
+      • Wordmark in Quicksand with rose→indigo→gold gradient + white glaze
+      • Blob group breathes softly (CSS animation) — wet paint still settling
+  -->
+  <svg id="spatiality-logo"
+       viewBox="0 0 186 44"
+       xmlns="http://www.w3.org/2000/svg"
+       width="186" height="44"
+       aria-label="Spatiality">
+    <defs>
+      <!-- Organic paint-edge filter: subtle turbulence keeps text legible -->
+      <filter id="wcp" x="-8%" y="-8%" width="116%" height="116%">
+        <feTurbulence type="fractalNoise"
+                      baseFrequency="0.062 0.078"
+                      numOctaves="2" seed="11" result="n"/>
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="1.6"
+                           xChannelSelector="R" yChannelSelector="G"/>
+      </filter>
+      <!-- Halo blur: heavy Gaussian for wet-pooling wash behind paint -->
+      <filter id="wch" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="6"/>
+      </filter>
+      <!-- Wordmark gradient: rose → indigo → warm gold (three ink wells) -->
+      <linearGradient id="logo-g" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%"   stop-color="#C02848"/>
+        <stop offset="50%"  stop-color="#1A28A8"/>
+        <stop offset="100%" stop-color="#A87018"/>
+      </linearGradient>
+    </defs>
+
+    <!-- ── Colour wash halos (pigment pooling on paper) ──────────────── -->
+    <ellipse cx="20"  cy="21" rx="22" ry="16" fill="#C02848" opacity="0.13" filter="url(#wch)"/>
+    <ellipse cx="95"  cy="21" rx="44" ry="14" fill="#1A28A8" opacity="0.09" filter="url(#wch)"/>
+    <ellipse cx="164" cy="21" rx="20" ry="14" fill="#A87018" opacity="0.11" filter="url(#wch)"/>
+
+    <!-- ── Logo mark: three pigment blobs (rose · indigo · gold) ─────── -->
+    <g class="sp-blobs">
+      <circle cx="8"  cy="14" r="6.4" fill="#C02848" opacity="0.72" filter="url(#wcp)"/>
+      <circle cx="21" cy="25" r="5.8" fill="#1A28A8" opacity="0.68" filter="url(#wcp)"/>
+      <circle cx="31" cy="14" r="5.2" fill="#A87018" opacity="0.70" filter="url(#wcp)"/>
+    </g>
+
+    <!-- Wet specular highlights — each blob has a bright reflection -->
+    <circle cx="7"  cy="12" r="1.9" fill="white" opacity="0.68"/>
+    <circle cx="20" cy="23" r="1.7" fill="white" opacity="0.62"/>
+    <circle cx="30" cy="12" r="1.5" fill="white" opacity="0.65"/>
+
+    <!-- Micro satellite drops — paint splatter around the mark -->
+    <circle cx="3"  cy="29" r="1.4" fill="#C02848" opacity="0.42" filter="url(#wcp)"/>
+    <circle cx="35" cy="29" r="1.2" fill="#A87018" opacity="0.40" filter="url(#wcp)"/>
+    <circle cx="37" cy="17" r="1.0" fill="#1A28A8" opacity="0.38" filter="url(#wcp)"/>
+
+    <!-- ── Wordmark ──────────────────────────────────────────────────── -->
+    <!-- Depth shadow — faint dark offset for painted-on-paper depth -->
+    <text x="44" y="32"
+          font-family="'Quicksand', 'Varela Round', sans-serif"
+          font-size="20" font-weight="700" letter-spacing="0.6"
+          fill="rgba(18,8,36,0.08)"
+          filter="url(#wcp)">Spatiality</text>
+    <!-- Primary text: gradient + organic displacement edges -->
+    <text x="44" y="31"
+          font-family="'Quicksand', 'Varela Round', sans-serif"
+          font-size="20" font-weight="700" letter-spacing="0.6"
+          fill="url(#logo-g)" opacity="0.85"
+          filter="url(#wcp)">Spatiality</text>
+    <!-- White glaze — wet-paint luminosity on top of pigment -->
+    <text x="44" y="31"
+          font-family="'Quicksand', 'Varela Round', sans-serif"
+          font-size="20" font-weight="700" letter-spacing="0.6"
+          fill="white" opacity="0.16"
+          filter="url(#wcp)">Spatiality</text>
+  </svg>
 
   <!-- ── Brush Lab ─────────────────────────────────────────────────────── -->
   <button id="brush-lab-toggle" type="button">Brush Lab</button>
