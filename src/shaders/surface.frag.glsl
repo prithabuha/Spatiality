@@ -30,6 +30,7 @@ uniform float u_time;
 uniform vec2  u_screenSize;
 uniform vec2  u_paintUvOffset;
 uniform vec2  u_paintUvScale;
+uniform vec2  u_simTexelSize;   // 1/simResolution — for anti-pixelation soft fetch
 uniform vec2  u_substrateTexelSize;
 uniform vec2  u_paperTexScale;  // UV repeat scale per surface
 uniform float u_borderBlur;     // 0=sharp edge, 1=very soft dissolve
@@ -149,11 +150,23 @@ void main() {
     u_paintUvOffset + u_paintUvScale - vec2(0.001)
   );
 
+  // ── Anti-pixelation: 5-tap tent filter on paint density ──────────────────
+  // The sim texture (512×512) is displayed on large 3-D planes. Bilinear
+  // alone gives blocky edges because the paint/paper transition spans only
+  // 1-2 texels. A tent filter spreads that transition over ~3 texels, making
+  // edges smooth even at 4 K projection scale.
+  vec2  stx = u_simTexelSize;
   vec4  paintData = texture2D(tPaint, paintUV);
-  float density   = paintData.a;
+  float dC = paintData.a;
+  float dN = texture2D(tPaint, paintUV + vec2( 0.0,   stx.y)).a;
+  float dS = texture2D(tPaint, paintUV + vec2( 0.0,  -stx.y)).a;
+  float dE = texture2D(tPaint, paintUV + vec2( stx.x,  0.0 )).a;
+  float dW = texture2D(tPaint, paintUV + vec2(-stx.x,  0.0 )).a;
+  float density = dC * 0.40 + (dN + dS + dE + dW) * 0.15;
 
+  // Hue comes from the single-tap sample (colour is already smooth due to K-M)
   vec3 paintHue = density > 0.008
-    ? clamp(paintData.rgb / density, vec3(0.0), vec3(1.0))
+    ? clamp(paintData.rgb / max(paintData.a, 0.001), vec3(0.0), vec3(1.0))
     : vec3(0.0);
 
   // ── Vibrance boost — saturated watercolour look ───────────────────────────
@@ -208,9 +221,29 @@ void main() {
   vec3 waterTint = vec3(0.008, 0.013, 0.020) * wetness;
   kmResult += waterTint * 0.12;
 
+  // ── Watercolor border noise — organic deckled edge ────────────────────────
+  // Real watercolor spreads unevenly along the paper grain. Three noise octaves
+  // at different scales create the characteristic ragged bloom edge.
+  // All offsets are STATIC (no u_time) so the edge stays fixed once dried.
+  float bN1 = _gnoise(vUv * 55.0  + vec2(31.41, 17.73)) * 0.5 + 0.5; // coarse flow
+  float bN2 = _gnoise(vUv * 140.0 + vec2(61.07, 43.21)) * 0.5 + 0.5; // medium fibre
+  float bN3 = _gnoise(vUv * 295.0 + vec2(11.23, 71.89)) * 0.5 + 0.5; // fine grain
+  float borderNoise = bN1 * 0.42 + bN2 * 0.35 + bN3 * 0.23;
+
+  // Edge zone: thin wash transition (not solid interior, not empty paper)
+  // Bell-shaped: rises from zero at density=0.003, peaks near 0.06, falls to 0 at 0.30
+  float edginess = smoothstep(0.003, 0.065, density)
+                 * (1.0 - smoothstep(0.065, 0.300, density));
+
+  // Noise modulates the blend density at the edge only.
+  // Dark noise holes → paint didn't reach those micro-valleys.
+  // The colour itself is unchanged — only the visibility at the edge varies.
+  float noiseDensity = density * (0.08 + borderNoise * 1.84);
+  float blendDensity = mix(density, noiseDensity, edginess * 0.82);
+
   // ── Final blend: painted vs unpainted — border blur controlled by slider ──
-  float blurHigh = 0.012 + u_borderBlur * 0.10;  // 0=sharp(0.012), 1=soft(0.112)
-  float kmBlend  = smoothstep(0.001, blurHigh, density);
+  float blurHigh = 0.014 + u_borderBlur * 0.10;  // 0=sharp(0.014), 1=soft(0.114)
+  float kmBlend  = smoothstep(0.001, blurHigh, blendDensity);
   vec3 result = mix(canvas, kmResult, kmBlend);
 
   // Paper grain subtly visible even through paint (cold-press texture feel)

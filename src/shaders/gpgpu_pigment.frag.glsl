@@ -125,9 +125,18 @@ void main() {
   float dryProgress = smoothstep(0.625, 1.0, dryTimer);
 
   // ── BAKED LAYER LOCK ──────────────────────────────────────────────────────
-  bool fullyDried   = (dryProgress >= 0.98);
+  // Dried pixels return prev unchanged unless the active brush is directly
+  // over them — this prevents adjacent new strokes from re-diffusing or
+  // degrading already-baked paint.
+  bool fullyDried   = (dryProgress >= 0.95);
   bool neverPainted = (water < 0.004 && dryTimer < 0.001);
-  if ((fullyDried || neverPainted) && u_painting < 0.5) {
+  bool brushAffects = false;
+  if (u_painting > 0.5) {
+    vec2 bd = uv - u_brushUV;
+    bd.x *= u_screenAspect;
+    brushAffects = (length(bd) < u_brushRadius * 2.8);
+  }
+  if ((fullyDried || neverPainted) && !brushAffects) {
     gl_FragColor = prev;
     return;
   }
@@ -395,9 +404,12 @@ void main() {
   }
 
   // ── H. Pigment retention / colour lock ───────────────────────────────────
+  // Raised base from 0.94 → 0.975 so wet-phase diffusion can only remove
+  // at most 2.5 % density per frame (down from 6 %) before the baked lock
+  // takes over.  This prevents thin washes from fading during the first 0.8 s.
   if (u_painting < 0.5) {
     float lock   = 1.0 - smoothstep(0.05, 0.75, water);
-    float retain = 0.94 + lock * 0.04 * u_retentionStrength;
+    float retain = 0.975 + lock * 0.025 * u_retentionStrength;
     newA = max(newA, prev.a * retain);
 
     float safePrevA = max(prev.a, 0.001);
