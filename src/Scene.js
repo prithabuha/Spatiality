@@ -94,7 +94,6 @@ export class Scene {
         u_paintUvOffset:      { value: paintRect.offset.clone() },
         u_paintUvScale:       { value: paintRect.scale.clone() },
         u_substrateTexelSize: { value: this.gpgpu.substrateTexelSize },
-        u_simTexelSize:       { value: new THREE.Vector2(1.0 / this.gpgpu.simResolution, 1.0 / this.gpgpu.simResolution) },
         u_paperTexScale:      { value: paperTexScale.clone() },
         u_borderBlur:         { value: 0.15 },
       },

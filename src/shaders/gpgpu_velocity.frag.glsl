@@ -166,15 +166,9 @@ void main() {
     }
 
     if (maxEff > 0.04) {
-      // Graduated reset: strong brush contact (centre) fully re-wets the pixel.
-      // Peripheral halo contact (low maxEff) protects already-locked pixels so
-      // adjacent dried paint is not accidentally re-wetted and re-diffused.
-      float contactStr = smoothstep(0.04, 0.55, maxEff);
-      float wasLocked  = step(0.98, smoothstep(0.625, 1.0, dryTimer));
-      // Locked pixels resist halo re-wetting; only strong contact resets them
-      float resetAmt   = contactStr * (1.0 - wasLocked * (1.0 - contactStr));
-      newTimer    = mix(dryTimer, 0.0, resetAmt);
-      dryProgress = smoothstep(0.625, 1.0, newTimer);
+      // Fresh brush contact: reset drying timer → pixel is wet again
+      newTimer    = 0.0;
+      dryProgress = 0.0;
       newVel     += accumForce;
       newWater    = max(newWater, maxWaterInj);
     }
