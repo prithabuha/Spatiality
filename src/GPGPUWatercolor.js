@@ -30,7 +30,7 @@ const DEFAULT_SIM_RES = 512;
 export class GPGPUWatercolor {
   constructor(renderer, opts = {}) {
     this.renderer = renderer;
-    const simRes = Math.max(192, Math.min(1024, Math.round(opts.simResolution ?? DEFAULT_SIM_RES)));
+    const simRes = Math.max(192, Math.min(2048, Math.round(opts.simResolution ?? DEFAULT_SIM_RES)));
     this.simResolution = simRes;
 
     // Prefer half-float for mobile performance (WebGL2 has it natively)

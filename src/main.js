@@ -84,12 +84,13 @@ const brushSmoothingValue = document.getElementById('brush-smoothing-value');
 
 function getPerformanceProfile() {
   const profiles = {
-    projection: { pixelRatioCap: 4.0,  simResolution: 1024, antialias: true  }, // 4K projector
-    high:       { pixelRatioCap: 2.0,  simResolution: 768,  antialias: true  },
-    balanced:   { pixelRatioCap: 1.5,  simResolution: 512,  antialias: true  },
-    fast:       { pixelRatioCap: 1.25, simResolution: 384,  antialias: false },
+    projection: { pixelRatioCap: 4.0,  simResolution: 2048, antialias: true  }, // 4K projector — maximum
+    high:       { pixelRatioCap: 2.0,  simResolution: 1024, antialias: true  },
+    balanced:   { pixelRatioCap: 1.5,  simResolution: 768,  antialias: true  },
+    fast:       { pixelRatioCap: 1.25, simResolution: 512,  antialias: false },
   };
 
+  // URL override — e.g. ?quality=fast for low-end devices
   const qualityParam = new URLSearchParams(window.location.search)
     .get('quality')
     ?.toLowerCase();
@@ -97,23 +98,8 @@ function getPerformanceProfile() {
     return { name: qualityParam, ...profiles[qualityParam] };
   }
 
-  // ?projection=true → force maximum quality for large-screen installs
-  const projectionMode = new URLSearchParams(window.location.search).get('projection');
-  if (projectionMode === 'true' || projectionMode === '1') {
-    return { name: 'projection', ...profiles.projection };
-  }
-
-  const cores = navigator.hardwareConcurrency ?? 4;
-  const mem   = navigator.deviceMemory ?? 4;
-  const coarsePointer = window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
-
-  if (cores <= 4 || mem <= 3 || coarsePointer) {
-    return { name: 'fast', ...profiles.fast };
-  }
-  if (cores >= 10 && mem >= 8 && !coarsePointer) {
-    return { name: 'high', ...profiles.high };
-  }
-  return { name: 'balanced', ...profiles.balanced };
+  // Default: full 4K projection quality for thesis / large-screen installs
+  return { name: 'projection', ...profiles.projection };
 }
 
 const perfProfile = getPerformanceProfile();
