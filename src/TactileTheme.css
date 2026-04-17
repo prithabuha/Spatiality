@@ -1,7 +1,7 @@
 /**
- * TactileTheme — Minimalist Paper / Neumorphic UI for Spatiality.
+ * TactileTheme — Minimalist Paper UI for Spatiality.
  *
- * Design system (reference: neumorphic white clay widget):
+ * Design system:
  *   Surface:    #FDFBF8  (Warm White — the one material everything is made of)
  *   Text:       #555555  (Charcoal)
  *   Sub-text:   #8F8F8F
@@ -9,9 +9,9 @@
  *   Font:       Quicksand (Google Fonts)
  *   Radius:     24px minimum, 999px for pills
  *
- * Neumorphic shadow logic — dual soft shadows create depth from ONE surface:
- *   Raised:  top-left bright  (-8 -8 16 white)  +  bottom-right dark (8 8 16 brown .08)
- *   Inset:   reversed, same magnitudes, creates concave bowl illusion
+ * Shadow logic:
+ *   Raised:  single-direction drop shadow (0 Y blur rgba(0,0,0,α)) — floating card feel
+ *   Inset:   bilateral inset shadows — concave bowl / slider track / palette wells
  *
  * Grain overlay: 128px SVG feTurbulence tile at ~3% opacity adds paper tactility.
  */
@@ -26,20 +26,20 @@
   --p-accent:    #333333;
   --p-border:    rgba(70, 50, 20, 0.06);
 
-  /* Raised (extruded) — card, button, thumb */
+  /* Raised (extruded) — large card / panel */
   --neu-raised:
-    -8px -8px 16px rgba(255, 255, 255, 1.0),
-     8px  8px 16px rgba(70, 50, 20, 0.08);
+    0  8px 32px rgba(0, 0, 0, 0.10),
+    0  2px  8px rgba(0, 0, 0, 0.06);
 
-  /* Raised small — pill buttons, webcam frame */
+  /* Raised small — pill buttons, webcam frame, reset btn */
   --neu-raised-sm:
-    -5px -5px 12px rgba(255, 255, 255, 1.0),
-     5px  5px 12px rgba(70, 50, 20, 0.08);
+    0  4px 16px rgba(0, 0, 0, 0.09),
+    0  1px  5px rgba(0, 0, 0, 0.05);
 
-  /* Raised extra small — slider thumb hover */
+  /* Raised extra small — slider thumb */
   --neu-raised-xs:
-    -3px -3px 8px  rgba(255, 255, 255, 1.0),
-     3px  3px 8px  rgba(70, 50, 20, 0.10);
+    0  2px  8px rgba(0, 0, 0, 0.08),
+    0  1px  3px rgba(0, 0, 0, 0.04);
 
   /* Inset (concave) — slider track, select, well */
   --neu-inset:
@@ -156,8 +156,8 @@ html, body {
 #brush-lab-toggle:hover {
   color: var(--p-accent);
   box-shadow:
-    -6px -6px 14px rgba(255, 255, 255, 1.0),
-     6px  6px 14px rgba(70, 50, 20, 0.11);
+    0  6px 20px rgba(0, 0, 0, 0.12),
+    0  2px  6px rgba(0, 0, 0, 0.07);
 }
 
 /* ── God Mode toggle — minimal icon, very bottom-right ─────────────────── */
@@ -181,8 +181,8 @@ html, body {
   opacity: 1.0;
   color: var(--p-text);
   box-shadow:
-    -6px -6px 14px rgba(255, 255, 255, 1.0),
-     6px  6px 14px rgba(70, 50, 20, 0.11);
+    0  4px 14px rgba(0, 0, 0, 0.10),
+    0  1px  4px rgba(0, 0, 0, 0.06);
 }
 
 /* ── Spatiality Logo — Fredoka One + paintbrush ─────────────────────────── */
@@ -429,8 +429,8 @@ html, body {
 .lab-row input[type='range']::-webkit-slider-thumb:hover,
 .god-row input[type='range']::-webkit-slider-thumb:hover {
   box-shadow:
-    -6px -6px 14px rgba(255, 255, 255, 1.0),
-     6px  6px 14px rgba(70, 50, 20, 0.12);
+    0  4px 12px rgba(0, 0, 0, 0.12),
+    0  1px  4px rgba(0, 0, 0, 0.07);
 }
 .lab-row input[type='range']::-moz-range-thumb,
 .god-row input[type='range']::-moz-range-thumb {
@@ -461,8 +461,8 @@ html, body {
 }
 .god-reset-btn:hover {
   box-shadow:
-    -6px -6px 14px rgba(255, 255, 255, 1.0),
-     6px  6px 14px rgba(70, 50, 20, 0.11);
+    0  6px 20px rgba(0, 0, 0, 0.11),
+    0  2px  6px rgba(0, 0, 0, 0.06);
 }
 .god-reset-btn:active {
   box-shadow: var(--neu-pressed);

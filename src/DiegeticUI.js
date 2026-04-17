@@ -78,10 +78,10 @@ export class DiegeticUI {
 
         background: #FDFBF8;
 
-        /* Raised card — same dual-shadow logic as panels */
+        /* Floating card — clean directional drop shadow */
         box-shadow:
-          -8px -8px 16px rgba(255, 255, 255, 1.0),
-           8px  8px 16px rgba(70, 50, 20, 0.08);
+          0  8px 32px rgba(0, 0, 0, 0.10),
+          0  2px  8px rgba(0, 0, 0, 0.06);
 
         border: none;
         user-select: none;
