@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Spatiality</title>
 
-  <!-- Quicksand — rounded geometric sans-serif for the tactile paper theme -->
+  <!-- Fredoka One — chunky display for logo · Quicksand — UI controls -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- TactileTheme — full neumorphic paper design system -->
   <link rel="stylesheet" href="/src/TactileTheme.css">
@@ -58,82 +58,71 @@
     <video id="webcam-bg" autoplay playsinline muted></video>
   </div>
 
-  <!-- ── Spatiality Logo — watercolor mark + wordmark ──────────────────── -->
+  <!-- ── Spatiality Logo ─────────────────────────────────────────────────── -->
   <!--
-    Design:
-      • Three pigment blobs (rose · indigo · gold) mirror the ink wells
-      • feTurbulence displacement gives each shape organic painted edges
-      • Layered Gaussian halos simulate watercolour pigment pooling on paper
-      • Wordmark in Quicksand with rose→indigo→gold gradient + white glaze
-      • Blob group breathes softly (CSS animation) — wet paint still settling
+    Style ref: "The Little Brush" children's art studio logo.
+      • Fredoka One — chunky, rounded, playful display letterforms
+      • 4-colour letter rotation: crimson · cobalt · amber · teal
+      • Vertical paintbrush left of wordmark (handle gradient = letter colours)
+      • Bristle tip teal-paint blob with live drip-pulse CSS animation
+      • Whole brush sways gently on a 7-second ease-in-out cycle
   -->
   <svg id="spatiality-logo"
-       viewBox="0 0 186 44"
+       viewBox="0 0 218 54"
        xmlns="http://www.w3.org/2000/svg"
-       width="186" height="44"
+       width="200" height="50"
        aria-label="Spatiality">
     <defs>
-      <!-- Organic paint-edge filter: subtle turbulence keeps text legible -->
-      <filter id="wcp" x="-8%" y="-8%" width="116%" height="116%">
-        <feTurbulence type="fractalNoise"
-                      baseFrequency="0.062 0.078"
-                      numOctaves="2" seed="11" result="n"/>
-        <feDisplacementMap in="SourceGraphic" in2="n" scale="1.6"
-                           xChannelSelector="R" yChannelSelector="G"/>
-      </filter>
-      <!-- Halo blur: heavy Gaussian for wet-pooling wash behind paint -->
-      <filter id="wch" x="-60%" y="-60%" width="220%" height="220%">
-        <feGaussianBlur stdDeviation="6"/>
-      </filter>
-      <!-- Wordmark gradient: rose → indigo → warm gold (three ink wells) -->
-      <linearGradient id="logo-g" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%"   stop-color="#C02848"/>
-        <stop offset="50%"  stop-color="#1A28A8"/>
-        <stop offset="100%" stop-color="#A87018"/>
+      <!-- Brush handle gradient — cycles through the four letter colours -->
+      <linearGradient id="sp-hg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stop-color="#E02A3A"/>
+        <stop offset="32%"  stop-color="#1848C8"/>
+        <stop offset="65%"  stop-color="#E09A00"/>
+        <stop offset="100%" stop-color="#12966A"/>
       </linearGradient>
+      <!-- Drop shadow for the brush mark -->
+      <filter id="sp-sh" x="-12%" y="-8%" width="124%" height="120%">
+        <feDropShadow dx="0.5" dy="1.5" stdDeviation="1.2"
+                      flood-color="rgba(0,0,0,0.18)"/>
+      </filter>
     </defs>
 
-    <!-- ── Colour wash halos (pigment pooling on paper) ──────────────── -->
-    <ellipse cx="20"  cy="21" rx="22" ry="16" fill="#C02848" opacity="0.13" filter="url(#wch)"/>
-    <ellipse cx="95"  cy="21" rx="44" ry="14" fill="#1A28A8" opacity="0.09" filter="url(#wch)"/>
-    <ellipse cx="164" cy="21" rx="20" ry="14" fill="#A87018" opacity="0.11" filter="url(#wch)"/>
-
-    <!-- ── Logo mark: three pigment blobs (rose · indigo · gold) ─────── -->
-    <g class="sp-blobs">
-      <circle cx="8"  cy="14" r="6.4" fill="#C02848" opacity="0.72" filter="url(#wcp)"/>
-      <circle cx="21" cy="25" r="5.8" fill="#1A28A8" opacity="0.68" filter="url(#wcp)"/>
-      <circle cx="31" cy="14" r="5.2" fill="#A87018" opacity="0.70" filter="url(#wcp)"/>
+    <!-- ── Paintbrush ──────────────────────────────────────────────────── -->
+    <g id="sp-brush" filter="url(#sp-sh)">
+      <!-- Handle: multi-colour rounded rod -->
+      <rect x="9" y="1" width="9" height="26" rx="4.5" fill="url(#sp-hg)"/>
+      <!-- Specular stripe on handle (wet gloss) -->
+      <rect x="10.5" y="2.5" width="2.5" height="20" rx="1.25"
+            fill="rgba(255,255,255,0.34)"/>
+      <!-- Ferrule: silver band -->
+      <rect x="8" y="25" width="11" height="6" rx="2.2" fill="#9CA4B8"/>
+      <rect x="9" y="25.5" width="9" height="2.5" rx="1"
+            fill="rgba(255,255,255,0.38)"/>
+      <!-- Bristle mass: teardrop-tapered shape -->
+      <path d="M8,31 C7.5,35 8.5,42 13.5,48 C18.5,42 19.5,35 19,31 Z"
+            fill="#2A1E30"/>
+      <!-- Inner bristle sheen -->
+      <path d="M10.5,32 C10,36 11,42 13.5,47 C12,42 11.5,36 11,32 Z"
+            fill="rgba(255,255,255,0.10)"/>
+      <!-- Paint blob at tip (id for animation) -->
+      <ellipse id="sp-paint" cx="13.5" cy="49" rx="5" ry="3" fill="#12966A"/>
+      <ellipse cx="11.8" cy="47.8" rx="1.8" ry="1.0"
+               fill="rgba(255,255,255,0.55)"/>
+      <!-- Micro drip below tip -->
+      <ellipse id="sp-drip" cx="13.5" cy="52.5" rx="2" ry="1.4"
+               fill="#12966A" opacity="0.55"/>
     </g>
 
-    <!-- Wet specular highlights — each blob has a bright reflection -->
-    <circle cx="7"  cy="12" r="1.9" fill="white" opacity="0.68"/>
-    <circle cx="20" cy="23" r="1.7" fill="white" opacity="0.62"/>
-    <circle cx="30" cy="12" r="1.5" fill="white" opacity="0.65"/>
-
-    <!-- Micro satellite drops — paint splatter around the mark -->
-    <circle cx="3"  cy="29" r="1.4" fill="#C02848" opacity="0.42" filter="url(#wcp)"/>
-    <circle cx="35" cy="29" r="1.2" fill="#A87018" opacity="0.40" filter="url(#wcp)"/>
-    <circle cx="37" cy="17" r="1.0" fill="#1A28A8" opacity="0.38" filter="url(#wcp)"/>
-
-    <!-- ── Wordmark ──────────────────────────────────────────────────── -->
-    <!-- Depth shadow — faint dark offset for painted-on-paper depth -->
-    <text x="44" y="32"
-          font-family="'Quicksand', 'Varela Round', sans-serif"
-          font-size="20" font-weight="700" letter-spacing="0.6"
-          fill="rgba(18,8,36,0.08)"
-          filter="url(#wcp)">Spatiality</text>
-    <!-- Primary text: gradient + organic displacement edges -->
-    <text x="44" y="31"
-          font-family="'Quicksand', 'Varela Round', sans-serif"
-          font-size="20" font-weight="700" letter-spacing="0.6"
-          fill="url(#logo-g)" opacity="0.85"
-          filter="url(#wcp)">Spatiality</text>
-    <!-- White glaze — wet-paint luminosity on top of pigment -->
-    <text x="44" y="31"
-          font-family="'Quicksand', 'Varela Round', sans-serif"
-          font-size="20" font-weight="700" letter-spacing="0.6"
-          fill="white" opacity="0.16"
-          filter="url(#wcp)">Spatiality</text>
+    <!-- ── Wordmark — Fredoka One, per-letter 4-colour rotation ──────── -->
+    <!--
+      S=crimson  p=cobalt  a=amber  t=teal
+      i=crimson  a=cobalt  l=amber  i=teal  t=crimson  y=cobalt
+    -->
+    <text x="32" y="38"
+          font-family="'Fredoka One', 'Quicksand', cursive"
+          font-size="28" letter-spacing="0.8">
+      <tspan fill="#E02A3A">S</tspan><tspan fill="#1848C8">p</tspan><tspan fill="#E09A00">a</tspan><tspan fill="#12966A">t</tspan><tspan fill="#E02A3A">i</tspan><tspan fill="#1848C8">a</tspan><tspan fill="#E09A00">l</tspan><tspan fill="#12966A">i</tspan><tspan fill="#E02A3A">t</tspan><tspan fill="#1848C8">y</tspan>
+    </text>
   </svg>
 
   <!-- ── Brush Lab ─────────────────────────────────────────────────────── -->
