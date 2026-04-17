@@ -14,12 +14,16 @@
  *   Device tilt           → gravity drip direction (IMU)
  */
 
-import * as THREE          from 'three';
-import { GPGPUWatercolor } from './GPGPUWatercolor.js';
-import { Scene }           from './Scene.js';
-import { HandTracker }     from './HandTracker.js';
-import { DiegeticUI }      from './DiegeticUI.js';
-import { WaterCursor }     from './WaterCursor.js';
+import * as THREE            from 'three';
+import { GPGPUWatercolor }   from './GPGPUWatercolor.js';
+import { Scene }             from './Scene.js';
+import { HandTracker }       from './HandTracker.js';
+import { DiegeticUI }        from './DiegeticUI.js';
+import { WaterCursor }       from './WaterCursor.js';
+import { PaperContainer }    from './PaperContainer.js';
+
+// ── Paper surface init (grain overlay + warm-white background) ───────────────
+const _paper = new PaperContainer();
 
 // ── DOM ──────────────────────────────────────────────────────────────────────
 const canvas       = document.getElementById('three-canvas');

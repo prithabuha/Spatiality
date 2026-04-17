@@ -1,0 +1,399 @@
+/**
+ * TactileTheme — Minimalist Paper / Neumorphic UI for Spatiality.
+ *
+ * Design system (reference: neumorphic white clay widget):
+ *   Surface:    #FDFBF8  (Warm White — the one material everything is made of)
+ *   Text:       #555555  (Charcoal)
+ *   Sub-text:   #8F8F8F
+ *   Accent:     #333333
+ *   Font:       Quicksand (Google Fonts)
+ *   Radius:     24px minimum, 999px for pills
+ *
+ * Neumorphic shadow logic — dual soft shadows create depth from ONE surface:
+ *   Raised:  top-left bright  (-8 -8 16 white)  +  bottom-right dark (8 8 16 brown .08)
+ *   Inset:   reversed, same magnitudes, creates concave bowl illusion
+ *
+ * Grain overlay: 128px SVG feTurbulence tile at ~3% opacity adds paper tactility.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap');
+
+/* ── Design tokens ──────────────────────────────────────────────────────── */
+:root {
+  --p-bg:        #FDFBF8;
+  --p-text:      #555555;
+  --p-sub:       #8F8F8F;
+  --p-accent:    #333333;
+  --p-border:    rgba(70, 50, 20, 0.06);
+
+  /* Raised (extruded) — card, button, thumb */
+  --neu-raised:
+    -8px -8px 16px rgba(255, 255, 255, 1.0),
+     8px  8px 16px rgba(70, 50, 20, 0.08);
+
+  /* Raised small — pill buttons, webcam frame */
+  --neu-raised-sm:
+    -5px -5px 12px rgba(255, 255, 255, 1.0),
+     5px  5px 12px rgba(70, 50, 20, 0.08);
+
+  /* Raised extra small — slider thumb hover */
+  --neu-raised-xs:
+    -3px -3px 8px  rgba(255, 255, 255, 1.0),
+     3px  3px 8px  rgba(70, 50, 20, 0.10);
+
+  /* Inset (concave) — slider track, select, well */
+  --neu-inset:
+    inset -4px -4px 10px rgba(255, 255, 255, 0.90),
+    inset  4px  4px 10px rgba(70, 50, 20, 0.10);
+
+  /* Inset deep — palette wells (from spec: -8 -8 16 white / 8 8 16 brown .08) */
+  --neu-well:
+    inset -8px -8px 16px rgba(255, 255, 255, 1.0),
+    inset  8px  8px 16px rgba(70, 50, 20, 0.08);
+
+  /* Pressed — active button state */
+  --neu-pressed:
+    inset -3px -3px 7px  rgba(255, 255, 255, 0.85),
+    inset  3px  3px 7px  rgba(70, 50, 20, 0.12);
+
+  --radius-card: 24px;
+  --radius-pill: 999px;
+  --radius-btn:  18px;
+  --radius-sm:   12px;
+}
+
+/* ── Base reset ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  overflow: hidden;
+  background: var(--p-bg);
+  font-family: 'Quicksand', 'Varela Round', 'Segoe UI Rounded', sans-serif;
+  color: var(--p-text);
+}
+
+/* ── Paper grain overlay ────────────────────────────────────────────────── */
+/* 128×128 SVG feTurbulence tile — feels like cold-press paper fibres       */
+#paper-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 2;             /* above Three.js canvas, below all panels */
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.80' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 128px 128px;
+  background-repeat: repeat;
+  opacity: 0.030;
+  mix-blend-mode: multiply;
+}
+
+/* ── Webcam mini-view ───────────────────────────────────────────────────── */
+#webcam-mini {
+  position: absolute;
+  bottom: 14px; right: 14px;
+  width: 130px; height: 98px;
+  border-radius: 20px;
+  overflow: hidden;
+  border: none;
+  z-index: 10;
+  box-shadow: var(--neu-raised-sm);
+}
+#webcam-bg {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  filter: grayscale(0.15) brightness(0.98);
+}
+
+/* ── Hint chip ──────────────────────────────────────────────────────────── */
+#hint-chip {
+  position: absolute;
+  bottom: 175px;
+  left: 50%; transform: translateX(-50%);
+  background: var(--p-bg);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 10px 28px;
+  font-family: 'Quicksand', sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--p-sub);
+  z-index: 20;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: var(--neu-raised-sm);
+  letter-spacing: 0.3px;
+}
+
+/* ── Toggle Buttons — pill, raised, monochrome ──────────────────────────── */
+#brush-lab-toggle,
+#god-mode-toggle {
+  position: absolute;
+  top: 14px;
+  z-index: 24;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 10px 20px;
+  font-family: 'Quicksand', sans-serif;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--p-text);
+  background: var(--p-bg);
+  cursor: pointer;
+  box-shadow: var(--neu-raised-sm);
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+  user-select: none;
+}
+#brush-lab-toggle:hover,
+#god-mode-toggle:hover {
+  color: var(--p-accent);
+  box-shadow:
+    -6px -6px 14px rgba(255, 255, 255, 1.0),
+     6px  6px 14px rgba(70, 50, 20, 0.11);
+}
+#brush-lab-toggle:active,
+#god-mode-toggle:active {
+  box-shadow: var(--neu-pressed);
+}
+#brush-lab-toggle { left: 14px; }
+#god-mode-toggle  { right: 14px; }
+
+/* ── Panels — raised card on warm white ─────────────────────────────────── */
+#brush-lab,
+#god-mode {
+  position: absolute;
+  z-index: 23;
+  border-radius: var(--radius-card);
+  border: none;
+  background: var(--p-bg);
+  box-shadow: var(--neu-raised);
+  padding: 18px;
+  transition: opacity 0.20s ease, transform 0.20s ease;
+}
+#brush-lab { top: 58px; left: 14px; width: 292px; }
+#god-mode  { top: 58px; right: 14px; width: 304px; max-height: 88vh; overflow-y: auto; }
+
+#god-mode::-webkit-scrollbar { width: 3px; }
+#god-mode::-webkit-scrollbar-track { background: transparent; }
+#god-mode::-webkit-scrollbar-thumb {
+  background: rgba(70, 50, 20, 0.12);
+  border-radius: 3px;
+}
+
+#brush-lab.is-collapsed,
+#god-mode.is-collapsed {
+  opacity: 0;
+  transform: translateY(-12px) scale(0.97);
+  pointer-events: none;
+}
+
+/* ── Panel headers ──────────────────────────────────────────────────────── */
+.lab-head,
+.god-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--p-border);
+}
+.lab-head strong,
+.god-head strong {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  color: var(--p-accent);
+}
+.lab-head span,
+.god-head span {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--p-sub);
+  letter-spacing: 0.5px;
+}
+
+/* ── Brush Lab rows ─────────────────────────────────────────────────────── */
+.lab-row {
+  display: grid;
+  grid-template-columns: 84px 1fr 44px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--p-text);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+}
+.lab-value {
+  text-align: right;
+  font-size: 10.5px;
+  color: var(--p-sub);
+  font-variant-numeric: tabular-nums;
+  font-family: 'Courier New', monospace;
+}
+.lab-row input[type='color'] {
+  width: 100%;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--p-bg);
+  padding: 3px;
+  cursor: pointer;
+  box-shadow: var(--neu-inset);
+}
+.lab-row select {
+  width: 100%;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--p-bg);
+  color: var(--p-text);
+  font-family: 'Quicksand', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 8px;
+  box-shadow: var(--neu-inset);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ── God Mode sections ──────────────────────────────────────────────────── */
+.god-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--p-border);
+}
+.god-section-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--p-sub);
+  margin-bottom: 8px;
+}
+
+/* ── God Mode rows ──────────────────────────────────────────────────────── */
+.god-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 46px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.god-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--p-text);
+  line-height: 1.30;
+}
+.god-label small {
+  display: block;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--p-sub);
+  margin-top: 1px;
+}
+.god-value {
+  text-align: right;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--p-accent);
+  font-variant-numeric: tabular-nums;
+  font-family: 'Courier New', monospace;
+}
+
+/* ── Unified Neumorphic slider ──────────────────────────────────────────── */
+/* Track: inset concave groove                                               */
+.lab-row input[type='range'],
+.god-row input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 4px;
+  background: var(--p-bg);
+  box-shadow: var(--neu-inset);
+  outline: none;
+  cursor: pointer;
+}
+/* Thumb: raised circular pebble */
+.lab-row input[type='range']::-webkit-slider-thumb,
+.god-row input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--p-bg);
+  box-shadow: var(--neu-raised-sm);
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+.lab-row input[type='range']::-webkit-slider-thumb:hover,
+.god-row input[type='range']::-webkit-slider-thumb:hover {
+  box-shadow:
+    -6px -6px 14px rgba(255, 255, 255, 1.0),
+     6px  6px 14px rgba(70, 50, 20, 0.12);
+}
+.lab-row input[type='range']::-moz-range-thumb,
+.god-row input[type='range']::-moz-range-thumb {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--p-bg);
+  box-shadow: var(--neu-raised-sm);
+  border: none;
+  cursor: pointer;
+}
+
+/* ── Reset button ───────────────────────────────────────────────────────── */
+.god-reset-btn {
+  margin-top: 16px;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: var(--radius-btn);
+  background: var(--p-bg);
+  color: var(--p-sub);
+  font-family: 'Quicksand', sans-serif;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  box-shadow: var(--neu-raised-sm);
+  transition: box-shadow 0.15s ease;
+}
+.god-reset-btn:hover {
+  box-shadow:
+    -6px -6px 14px rgba(255, 255, 255, 1.0),
+     6px  6px 14px rgba(70, 50, 20, 0.11);
+}
+.god-reset-btn:active {
+  box-shadow: var(--neu-pressed);
+}
+
+/* ── Orb ripple (keeps working against light bg) ────────────────────────── */
+@keyframes orbRipple {
+  0%   { transform: translate(-50%, -50%) scale(1);   opacity: 0.55; border-width: 3px; }
+  60%  { opacity: 0.25; }
+  100% { transform: translate(-50%, -50%) scale(5.5); opacity: 0;    border-width: 1px; }
+}
+.orb-ripple {
+  position: fixed;
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  border: 3px solid currentColor;
+  pointer-events: none;
+  z-index: 50;
+  animation: orbRipple 0.72s cubic-bezier(0.05, 0.45, 0.35, 1.0) forwards;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  #brush-lab-toggle { top: 10px; left: 10px;  padding: 9px 14px; }
+  #god-mode-toggle  { top: 10px; right: 10px; padding: 9px 14px; }
+  #brush-lab { top: 52px; left: 10px;  width: min(92vw, 310px); }
+  #god-mode  { top: 52px; right: 10px; width: min(92vw, 310px); }
+}

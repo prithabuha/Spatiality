@@ -70,15 +70,17 @@ export class WaterCursor {
       will-change: transform, left, top, filter;
     `;
 
-    /* Frosted-glass backdrop — gives genuine refraction through the drop */
+    /* Frosted-glass backdrop — refractive water-on-paper distortion.
+       brightness(1.08) mimics how a real water drop magnifies/brightens
+       the paper beneath it; saturate(1.06) enriches the wet-paper colour. */
     this._glass = document.createElement('div');
     this._glass.style.cssText = `
       position: absolute;
       inset: 0;
       clip-path: url(#wc-clip);
       -webkit-clip-path: url(#wc-clip);
-      backdrop-filter: blur(3px) brightness(1.10) saturate(1.12);
-      -webkit-backdrop-filter: blur(3px) brightness(1.10) saturate(1.12);
+      backdrop-filter: blur(5px) brightness(1.08) saturate(1.06);
+      -webkit-backdrop-filter: blur(5px) brightness(1.08) saturate(1.06);
     `;
 
     /* SVG overlay: coloured fill + shimmer + outline */
@@ -92,13 +94,17 @@ export class WaterCursor {
       height: 100%;
       overflow: visible;
     `;
+    /* On the warm-white paper surface water appears nearly clear — slightly
+       tinted by the pigment it carries, with a dark thin rim so it reads
+       against the bright background. The highlight stays bright white. */
     this._svg.innerHTML = `
       <defs>
-        <!-- Colour fill: white centre → tinted mid → opaque edge -->
+        <!-- Water fill: nearly clear centre → soft tint → semi-opaque edge -->
+        <!-- Lower opacity than before so the paper shows through cleanly   -->
         <radialGradient id="wc-fill" cx="42%" cy="30%" r="70%">
-          <stop id="wc-s1" offset="0%"   stop-color="white"   stop-opacity="0.14"/>
-          <stop id="wc-s2" offset="42%"  stop-color="#d93060" stop-opacity="0.30"/>
-          <stop id="wc-s3" offset="100%" stop-color="#d93060" stop-opacity="0.82"/>
+          <stop id="wc-s1" offset="0%"   stop-color="white"   stop-opacity="0.05"/>
+          <stop id="wc-s2" offset="38%"  stop-color="#d93060" stop-opacity="0.18"/>
+          <stop id="wc-s3" offset="100%" stop-color="#d93060" stop-opacity="0.55"/>
         </radialGradient>
 
         <!-- Primary shimmer highlight (orbiting) -->
@@ -108,29 +114,29 @@ export class WaterCursor {
         </radialGradient>
       </defs>
 
-      <!-- Main body fill -->
+      <!-- Main body fill — clear water tinted by active pigment -->
       <path id="wc-body"
             d="M25,3 C40,20 47,39 25,61 C3,39 10,20 25,3 Z"
             fill="url(#wc-fill)"/>
 
-      <!-- Outer perimeter rim — soft white halo -->
+      <!-- Rim — thin dark line so the drop reads on warm white paper -->
       <path id="wc-rim"
             d="M25,3 C40,20 47,39 25,61 C3,39 10,20 25,3 Z"
             fill="none"
-            stroke="rgba(255,255,255,0.52)"
-            stroke-width="1.5"/>
+            stroke="rgba(0,0,0,0.12)"
+            stroke-width="1.2"/>
 
-      <!-- Orbiting shimmer ellipse -->
+      <!-- Orbiting shimmer ellipse — the water-lens specular -->
       <ellipse id="wc-hi"
                cx="18" cy="16" rx="11" ry="7"
                fill="url(#wc-hi-grad)"
-               opacity="0.78"/>
+               opacity="0.88"/>
 
       <!-- Secondary pulsing sparkle -->
       <circle id="wc-spark"
               cx="32" cy="38" r="3"
-              fill="rgba(255,255,255,0.70)"
-              opacity="0.55"/>
+              fill="rgba(255,255,255,0.85)"
+              opacity="0.60"/>
     `;
 
     this.el.appendChild(this._glass);
@@ -225,11 +231,12 @@ export class WaterCursor {
     this._s2?.setAttribute('stop-color', col);
     this._s3?.setAttribute('stop-color', col);
 
-    /* ── 5. Drop-shadow glow ────────────────────────────────────────────── */
-    const glowA = this._active ? 0.72 : 0.48;
+    /* ── 5. Drop-shadow — subtle on bright paper ───────────────────────── */
+    /* Lighter shadow values so the droplet sits gently on the white surface */
+    const glowA = this._active ? 0.45 : 0.28;
     this.el.style.filter = [
-      `drop-shadow(0 5px 14px rgba(${R},${G},${B},${glowA}))`,
-      `drop-shadow(0 0  7px rgba(255,255,255,0.22))`,
+      `drop-shadow(0 4px 10px rgba(${R},${G},${B},${glowA}))`,
+      `drop-shadow(0 2px  5px rgba(0,0,0,0.08))`,
     ].join(' ');
 
     /* ── 6. Orbiting shimmer highlight ──────────────────────────────────── */

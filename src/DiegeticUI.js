@@ -50,18 +50,19 @@ export class DiegeticUI {
     const s = document.createElement('style');
     s.id = 'diegetic-ui-css';
     s.textContent = /* css */`
-      /* ── Global font override → Varela Round ─────────────────────────── */
+      /* ── Global font override → Quicksand (tactile paper theme) ─────── */
       body, button, select, input, label,
       #hint-chip, .lab-head, .lab-row, .god-label, .god-head, .god-section-label {
-        font-family: 'Varela Round', 'Segoe UI Rounded', sans-serif !important;
+        font-family: 'Quicksand', 'Varela Round', 'Segoe UI Rounded', sans-serif !important;
       }
 
-      /* Hint chip: positioned above palette — matches dark studio theme */
+      /* Hint chip: keep above palette (TactileTheme.css has it at 175px) */
       #hint-chip {
         bottom: 175px !important;
       }
 
-      /* ── Palette board ───────────────────────────────────────────────── */
+      /* ── Palette board — neumorphic raised bar ───────────────────────── */
+      /* Same warm-white surface as everything else; depth from shadows.    */
       #diegetic-palette {
         position: fixed;
         bottom: 28px;
@@ -71,42 +72,18 @@ export class DiegeticUI {
 
         display: flex;
         align-items: center;
-        gap: 34px;
-        padding: 20px 40px 17px;
-        border-radius: 22px;
+        gap: 36px;
+        padding: 20px 44px 18px;
+        border-radius: 28px;
 
-        /* Cold-press wood: layered grain streaks + warm tones */
-        background:
-          repeating-linear-gradient(
-            94deg,
-            transparent 0px, transparent 52px,
-            rgba(0,0,0,0.024) 52px, rgba(0,0,0,0.024) 53px
-          ),
-          linear-gradient(
-            172deg,
-            #CFA06A 0%,
-            #A87545 18%,
-            #8C5E2A 40%,
-            #AA7A48 58%,
-            #C09260 74%,
-            #8A5A2A 100%
-          );
+        background: #FDFBF8;
 
-        /* Raised-board illusion: stacked bottom edges + drop shadow */
+        /* Raised card — same dual-shadow logic as panels */
         box-shadow:
-          inset 0 1px 0 rgba(255, 215, 155, 0.52),
-          inset 1px 0 0 rgba(255, 200, 130, 0.20),
-          0 2px 0 #7C5025,
-          0 4px 0 #6B421A,
-          0 6px 0 #5C3614,
-          0 8px 0 #4E2C0C,
-          0 16px 36px rgba(0, 0, 0, 0.52),
-          0 30px 60px rgba(0, 0, 0, 0.18);
+          -8px -8px 16px rgba(255, 255, 255, 1.0),
+           8px  8px 16px rgba(70, 50, 20, 0.08);
 
-        border: 1px solid rgba(55, 28, 0, 0.35);
-        border-bottom-color: rgba(0, 0, 0, 0.60);
-
-        /* Prevent selection */
+        border: none;
         user-select: none;
         -webkit-tap-highlight-color: transparent;
       }
@@ -120,95 +97,96 @@ export class DiegeticUI {
         cursor: pointer;
       }
 
-      /* ── Recessed cup ────────────────────────────────────────────────── */
+      /* ── Concave cup — neumorphic inset circle ───────────────────────── */
+      /* Spec: "inset shadows for depth — top-left white / bottom-right     */
+      /* rgba(70,50,20,0.08)" per the Minimalist Paper spec.               */
       .dw-cup {
-        width: 74px;
-        height: 74px;
+        width: 72px;
+        height: 72px;
         border-radius: 50%;
         position: relative;
         overflow: visible;
+        background: #FDFBF8;
         transition: transform 0.16s ease;
 
-        /* Deep cavity: stacked inset shadows create dimensional recess */
+        /* Concave bowl illusion — exact spec values */
         box-shadow:
-          0 2px 7px rgba(0, 0, 0, 0.58),
-          inset 0 1px 3px rgba(255, 255, 255, 0.10),
-          inset 0 7px 20px rgba(0, 0, 0, 0.80),
-          inset 0 14px 30px rgba(0, 0, 0, 0.60),
-          inset 0 -3px 10px rgba(0, 0, 0, 0.38);
+          inset -8px -8px 16px rgba(255, 255, 255, 1.0),
+          inset  8px  8px 16px rgba(70, 50, 20, 0.08);
       }
 
-      /* Pigment fill: wet-surface gloss via compound gradient */
+      /* Pigment ink: coloured fill inside the bowl + wet specular sheen */
       .dw-cup::before {
         content: '';
         position: absolute;
-        inset: 0;
+        /* Recessed inner disc — slightly smaller than the bowl rim */
+        inset: 10px;
         border-radius: 50%;
         background-color: var(--well-pigment);
         background-image:
-          /* Wet sheen: top-left specular */
           radial-gradient(
-            ellipse 52% 40% at 36% 26%,
-            rgba(255, 255, 255, 0.32) 0%,
-            rgba(255, 255, 255, 0.07) 50%,
+            ellipse 55% 42% at 34% 28%,
+            rgba(255, 255, 255, 0.42) 0%,
+            rgba(255, 255, 255, 0.10) 48%,
             transparent 100%
           ),
-          /* Secondary bottom-right bounce */
           radial-gradient(
-            ellipse 40% 30% at 72% 75%,
-            rgba(255, 255, 255, 0.08) 0%,
+            ellipse 38% 28% at 72% 74%,
+            rgba(255, 255, 255, 0.12) 0%,
             transparent 70%
           );
+        /* Soft drop on the pigment disc for depth */
+        box-shadow: 0 2px 8px rgba(70, 50, 20, 0.22);
       }
 
-      /* Active ring — glows in the well's colour */
+      /* Active ring — coloured outline that lifts when selected */
       .dw-cup::after {
         content: '';
         position: absolute;
-        inset: -6px;
+        inset: -5px;
         border-radius: 50%;
-        border: 2.5px solid var(--well-glow);
+        border: 2px solid var(--well-pigment);
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.24s ease, inset 0.24s ease;
+        transition: opacity 0.22s ease, inset 0.22s ease;
         box-shadow:
-          0 0 10px var(--well-glow),
-          0 0 22px rgba(255, 255, 255, 0.08),
-          inset 0 0 6px rgba(255, 255, 255, 0.10);
+          0 0 8px  var(--well-pigment),
+          0 0 16px rgba(0, 0, 0, 0.06);
       }
 
       .dw-well.is-active .dw-cup::after {
-        opacity: 1;
-        inset: -7px;
+        opacity: 0.85;
+        inset: -6px;
       }
-
       .dw-well.is-active .dw-cup {
         transform: translateY(-3px);
       }
 
       /* Press-dip animation */
       .dw-well.is-dipping .dw-cup {
-        transform: translateY(3px) scale(0.92) !important;
+        transform: translateY(2px) scale(0.93) !important;
         transition: transform 0.07s ease !important;
+        box-shadow:
+          inset -5px -5px 12px rgba(255, 255, 255, 1.0),
+          inset  5px  5px 12px rgba(70, 50, 20, 0.12) !important;
       }
 
       /* ── Well label ──────────────────────────────────────────────────── */
       .dw-label {
-        font-family: 'Varela Round', sans-serif;
-        font-size: 12.5px;
-        color: rgba(255, 235, 195, 0.88);
-        /* Offset ink shadow */
-        text-shadow: 2px 3px 0 rgba(20, 8, 0, 0.50);
-        letter-spacing: 0.5px;
+        font-family: 'Quicksand', sans-serif;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #8F8F8F;
+        letter-spacing: 0.4px;
         pointer-events: none;
       }
 
       /* ── Dip ripple rings ────────────────────────────────────────────── */
       @keyframes dwRipple {
-        0%   { transform: translate(-50%, -50%) scale(0.85);
-               opacity: 0.88; border-width: 3px; }
-        65%  { opacity: 0.40; }
-        100% { transform: translate(-50%, -50%) scale(3.8);
+        0%   { transform: translate(-50%, -50%) scale(0.88);
+               opacity: 0.70; border-width: 2.5px; }
+        60%  { opacity: 0.30; }
+        100% { transform: translate(-50%, -50%) scale(3.6);
                opacity: 0;   border-width: 1px; }
       }
 
@@ -217,10 +195,10 @@ export class DiegeticUI {
         top: 50%; left: 50%;
         width: 100%; height: 100%;
         border-radius: 50%;
-        border: 3px solid var(--well-glow);
+        border: 2.5px solid var(--well-pigment);
         pointer-events: none;
-        animation: dwRipple 0.68s cubic-bezier(0.05, 0.48, 0.35, 1.0) forwards;
-        box-shadow: 0 0 10px var(--well-glow);
+        animation: dwRipple 0.65s cubic-bezier(0.05, 0.48, 0.35, 1.0) forwards;
+        box-shadow: 0 0 6px var(--well-pigment);
       }
     `;
     document.head.appendChild(s);
