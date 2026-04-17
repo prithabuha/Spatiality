@@ -150,23 +150,28 @@ void main() {
     u_paintUvOffset + u_paintUvScale - vec2(0.001)
   );
 
-  // ── Anti-pixelation: 5-tap tent filter on paint density ──────────────────
+  // ── Anti-pixelation: 5-tap tent filter on full RGBA ─────────────────────
   // The sim texture (512×512) is displayed on large 3-D planes. Bilinear
   // alone gives blocky edges because the paint/paper transition spans only
-  // 1-2 texels. A tent filter spreads that transition over ~3 texels, making
-  // edges smooth even at 4 K projection scale.
+  // 1-2 texels. A tent filter spreads that transition over ~3 texels.
+  //
+  // CRITICAL: we filter the full RGBA together (premultiplied), then extract
+  // hue from smoothedRGB / smoothedAlpha.  Filtering alpha alone and dividing
+  // by the single-tap alpha causes black artefacts at the paint edge because
+  // edge texels have non-zero smoothed density but zero centre RGB.
   vec2  stx = u_simTexelSize;
-  vec4  paintData = texture2D(tPaint, paintUV);
-  float dC = paintData.a;
-  float dN = texture2D(tPaint, paintUV + vec2( 0.0,   stx.y)).a;
-  float dS = texture2D(tPaint, paintUV + vec2( 0.0,  -stx.y)).a;
-  float dE = texture2D(tPaint, paintUV + vec2( stx.x,  0.0 )).a;
-  float dW = texture2D(tPaint, paintUV + vec2(-stx.x,  0.0 )).a;
-  float density = dC * 0.40 + (dN + dS + dE + dW) * 0.15;
+  vec4  paintData  = texture2D(tPaint, paintUV);
+  vec4  paintDataN = texture2D(tPaint, paintUV + vec2( 0.0,   stx.y));
+  vec4  paintDataS = texture2D(tPaint, paintUV + vec2( 0.0,  -stx.y));
+  vec4  paintDataE = texture2D(tPaint, paintUV + vec2( stx.x,  0.0 ));
+  vec4  paintDataW = texture2D(tPaint, paintUV + vec2(-stx.x,  0.0 ));
+  vec4  paintSmooth = paintData * 0.40
+                    + (paintDataN + paintDataS + paintDataE + paintDataW) * 0.15;
+  float density = paintSmooth.a;
 
-  // Hue comes from the single-tap sample (colour is already smooth due to K-M)
+  // Hue extracted from the smoothed premul RGBA — stays correct at all edges
   vec3 paintHue = density > 0.008
-    ? clamp(paintData.rgb / max(paintData.a, 0.001), vec3(0.0), vec3(1.0))
+    ? clamp(paintSmooth.rgb / max(density, 0.001), vec3(0.0), vec3(1.0))
     : vec3(0.0);
 
   // ── Vibrance boost — saturated watercolour look ───────────────────────────
