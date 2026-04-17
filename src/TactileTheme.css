@@ -124,13 +124,26 @@ html, body {
   letter-spacing: 0.3px;
 }
 
-/* ── Toggle Buttons — pill, raised, monochrome ──────────────────────────── */
+/* ── Shared visual base for both controls ───────────────────────────────── */
 #brush-lab-toggle,
 #god-mode-toggle {
   position: absolute;
-  top: 14px;
   z-index: 24;
   border: none;
+  background: var(--p-bg);
+  cursor: pointer;
+  box-shadow: var(--neu-raised-sm);
+  transition: box-shadow 0.16s ease, opacity 0.16s ease, color 0.16s ease;
+  user-select: none;
+}
+#brush-lab-toggle:active,
+#god-mode-toggle:active { box-shadow: var(--neu-pressed); }
+
+/* ── Brush Lab toggle — pill button, top-left row ───────────────────────── */
+/* Logo 200px wide + 14px left edge + 10px gap = 224px */
+#brush-lab-toggle {
+  top: 14px;
+  left: 224px;
   border-radius: var(--radius-pill);
   padding: 10px 20px;
   font-family: 'Quicksand', sans-serif;
@@ -139,26 +152,38 @@ html, body {
   letter-spacing: 0.7px;
   text-transform: uppercase;
   color: var(--p-text);
-  background: var(--p-bg);
-  cursor: pointer;
-  box-shadow: var(--neu-raised-sm);
-  transition: box-shadow 0.16s ease, color 0.16s ease;
-  user-select: none;
 }
-#brush-lab-toggle:hover,
-#god-mode-toggle:hover {
+#brush-lab-toggle:hover {
   color: var(--p-accent);
   box-shadow:
     -6px -6px 14px rgba(255, 255, 255, 1.0),
      6px  6px 14px rgba(70, 50, 20, 0.11);
 }
-#brush-lab-toggle:active,
-#god-mode-toggle:active {
-  box-shadow: var(--neu-pressed);
+
+/* ── God Mode toggle — minimal icon, very bottom-right ─────────────────── */
+/* Dev-only tool: deliberately unobtrusive. G key also opens it.            */
+#god-mode-toggle {
+  bottom: 124px;
+  right: 14px;
+  top: auto;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  color: var(--p-sub);
+  opacity: 0.42;          /* almost hidden — this is a dev-only surface     */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0;           /* no visible label — icon only                   */
 }
-/* Logo 200px wide + 14px left edge + 10px gap = 224px before Brush Lab */
-#brush-lab-toggle { left: 224px; }
-#god-mode-toggle  { right: 14px; }
+#god-mode-toggle:hover {
+  opacity: 1.0;
+  color: var(--p-text);
+  box-shadow:
+    -6px -6px 14px rgba(255, 255, 255, 1.0),
+     6px  6px 14px rgba(70, 50, 20, 0.11);
+}
 
 /* ── Spatiality Logo — Fredoka One + paintbrush ─────────────────────────── */
 #spatiality-logo {
@@ -213,9 +238,11 @@ html, body {
   padding: 18px;
   transition: opacity 0.20s ease, transform 0.20s ease;
 }
-/* Panel aligns under its toggle (224px from left, matching toggle) */
+/* Brush Lab: opens downward from its toggle */
 #brush-lab { top: 58px; left: 224px; width: 292px; }
-#god-mode  { top: 58px; right: 14px; width: 304px; max-height: 88vh; overflow-y: auto; }
+/* God Mode: anchored to its bottom-right icon, opens upward */
+/* 124px icon-bottom + 36px icon-height + 8px gap = 168px   */
+#god-mode  { top: auto; bottom: 168px; right: 14px; width: 304px; max-height: 65vh; overflow-y: auto; }
 
 #god-mode::-webkit-scrollbar { width: 3px; }
 #god-mode::-webkit-scrollbar-track { background: transparent; }
@@ -224,11 +251,35 @@ html, body {
   border-radius: 3px;
 }
 
-#brush-lab.is-collapsed,
-#god-mode.is-collapsed {
+/* Brush Lab drops upward on close (panel above toggle) */
+#brush-lab.is-collapsed {
   opacity: 0;
   transform: translateY(-12px) scale(0.97);
   pointer-events: none;
+}
+/* God Mode drops downward on close (panel above icon, slides toward it) */
+#god-mode.is-collapsed {
+  opacity: 0;
+  transform: translateY(10px) scale(0.97);
+  pointer-events: none;
+}
+
+/* Brush mode segmented select inside God Mode */
+.god-select {
+  width: 100%;
+  height: 26px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--p-bg);
+  color: var(--p-text);
+  font-family: 'Quicksand', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 8px;
+  box-shadow: var(--neu-inset);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 /* ── Panel headers ──────────────────────────────────────────────────────── */
@@ -435,12 +486,13 @@ html, body {
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 720px) {
-  /* Logo scales to 156px on small screens (viewBox handles aspect ratio) */
-  #spatiality-logo { top: 8px; left: 10px; width: 156px; height: 39px; }
+  /* Logo scales to 156px on small screens */
+  #spatiality-logo  { top: 8px; left: 10px; width: 156px; height: 39px; }
   /* Brush Lab toggle: 10 + 156 + 8 = 174 */
   #brush-lab-toggle { top: 10px; left: 178px; padding: 9px 12px; font-size: 10.5px; }
-  #god-mode-toggle  { top: 10px; right: 10px; padding: 9px 12px; font-size: 10.5px; }
-  /* Panels snap to left edge on mobile */
+  /* God Mode stays bottom-right on mobile — just tighten spacing */
+  #god-mode-toggle  { bottom: 116px; right: 10px; width: 34px; height: 34px; }
+  /* Panels on mobile */
   #brush-lab { top: 52px; left: 10px;  width: min(92vw, 310px); }
-  #god-mode  { top: 52px; right: 10px; width: min(92vw, 310px); }
+  #god-mode  { bottom: 158px; right: 10px; width: min(92vw, 310px); }
 }

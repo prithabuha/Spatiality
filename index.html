@@ -186,16 +186,38 @@
   <div id="hint-chip">Point finger to paint · Wave both hands to clear ✦</div>
 
   <!-- ── God Mode ──────────────────────────────────────────────────────── -->
-  <button id="god-mode-toggle" type="button">⚡ God Mode</button>
-  <aside id="god-mode" class="is-collapsed" aria-label="God Mode controls">
+  <!-- God Mode: minimal icon button, very bottom-right. G key also works. -->
+  <button id="god-mode-toggle" type="button" title="Dev Controls  (G key)">
+    <svg viewBox="0 0 18 14" width="18" height="14" fill="none"
+         xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <line x1="1" y1="2"  x2="17" y2="2"  stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="13" cy="2"  r="2.4" fill="currentColor"/>
+      <line x1="1" y1="7"  x2="17" y2="7"  stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="6"  cy="7"  r="2.4" fill="currentColor"/>
+      <line x1="1" y1="12" x2="17" y2="12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="12" cy="12" r="2.4" fill="currentColor"/>
+    </svg>
+  </button>
+
+  <aside id="god-mode" class="is-collapsed" aria-label="Dev Controls">
 
     <div class="god-head">
-      <strong>⚡ God Mode</strong>
-      <span>DESIGNER CONTROLS</span>
+      <strong>Dev Controls</strong>
+      <span>SIMULATION OVERRIDES</span>
     </div>
 
     <!-- BRUSH -->
     <div class="god-section-label">Brush</div>
+
+    <label class="god-row">
+      <span class="god-label">Brush Mode<small>stroke style</small></span>
+      <select id="gm-brushtype" class="god-select">
+        <option value="0">● Round</option>
+        <option value="1">— Dry Brush</option>
+        <option value="2">· Splatter</option>
+      </select>
+      <span class="god-value"></span>
+    </label>
 
     <label class="god-row">
       <span class="god-label">Brush Size<small>stroke footprint</small></span>

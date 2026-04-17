@@ -37,6 +37,7 @@ const brushLab = document.getElementById('brush-lab');
 // ── God Mode elements ─────────────────────────────────────────────────────────
 const godModeToggle = document.getElementById('god-mode-toggle');
 const godModePanel  = document.getElementById('god-mode');
+const gmBrushType   = document.getElementById('gm-brushtype');  // select, not range
 const gmSliders = {
   size:      document.getElementById('gm-size'),
   pigment:   document.getElementById('gm-pigment'),
@@ -355,6 +356,9 @@ function applyGodMode() {
     v[k] = el ? parseFloat(el.value) : godDefaults[k];
   }
 
+  // Brush mode (select, not range slider)
+  if (gmBrushType) brushState.brushType = parseInt(gmBrushType.value, 10);
+
   // Brush geometry
   brushState.size     = v.size;
   brushState.pigment  = v.pigment;
@@ -407,12 +411,15 @@ function bindGodMode() {
   for (const el of Object.values(gmSliders)) {
     el?.addEventListener('input', applyGodMode);
   }
+  // Brush mode select
+  gmBrushType?.addEventListener('change', applyGodMode);
 
   // Reset button
   document.getElementById('gm-reset')?.addEventListener('click', () => {
     for (const [k, el] of Object.entries(gmSliders)) {
       if (el) el.value = String(godDefaults[k]);
     }
+    if (gmBrushType) gmBrushType.value = '0';  // default: Round
     applyGodMode();
     flashHint('God Mode reset ↺');
   });
