@@ -246,49 +246,61 @@ void main() {
     _hash1(toothCell.x * 19.3 + toothCell.y * 83.1));
   result = mix(result, vec3(0.0), hasDot * dotOpacity);
 
-  // ── Canvas weave overlay — crosshatch thread structure ───────────────────
+  // ── Canvas weave overlay — wavy organic crosshatch threads ──────────────
   //
-  // Two families of diagonal threads at 45° / 135°, matching the Processing
-  // technique from the DiVerdi watercolour paper:
-  //   • grid lines drawn at ±45° with spacing ~5 px
-  //   • each line subdivided into short segments; opacity, width and position
-  //     varied per-thread via deterministic hash (≈ random(20,50) alpha)
-  //   • overlaid as low-opacity white — visible on both paper and painted areas
+  // Straight diagonal lines feel synthetic. Real canvas/paper fibres follow
+  // gentle curves with local kinks. Fix: domain-warp the UV coordinates with
+  // TWO independent multi-octave noise fields (one per thread direction) before
+  // computing thread positions. Each family bends differently → natural weave.
   //
-  // wUV controls thread density: 155 cycles across UV → ~5-6 px at 4 K.
+  // Warp budget:
+  //   lo-freq (wUV/22): waves spanning ~22 thread spacings  → long gentle curves
+  //   md-freq (wUV/8 ): waves spanning  ~8 thread spacings  → shorter local kinks
+  //   Amplitude 2.0 + 0.7 ≈ 2.7 wUV units → threads shift up to ~2 spacings
   vec2  wUV = vUv * 155.0;
   float ROOT2_INV = 0.70711;
 
-  // Perpendicular coordinate for each thread family
-  float tA = ( wUV.x + wUV.y) * ROOT2_INV;  //  45° family
-  float tB = (-wUV.x + wUV.y) * ROOT2_INV;  // 135° family
+  // ── Domain warp — separate fields for each thread family ─────────────────
+  vec2 lo = wUV / 22.0;   // low-frequency noise coordinates
+  vec2 md = wUV /  8.0;   // medium-frequency noise coordinates
 
-  // Per-thread random opacity (7–22%) and width (10–22% of spacing)
-  // Seeded from integer thread index → different every thread, same every frame
+  // Family A (45°) warp — long lazy curves + short kinks
+  float wAx = _gnoise(lo)                      * 2.0 + _gnoise(md + vec2(11.3, 4.7)) * 0.7;
+  float wAy = _gnoise(lo + vec2( 5.2,  8.9))  * 2.0 + _gnoise(md + vec2( 3.1, 9.3)) * 0.7;
+
+  // Family B (135°) warp — fully independent noise offsets → separate bending
+  float wBx = _gnoise(lo + vec2(17.4,  2.1))  * 2.0 + _gnoise(md + vec2( 7.9,14.2)) * 0.7;
+  float wBy = _gnoise(lo + vec2( 9.7, 13.6))  * 2.0 + _gnoise(md + vec2(15.3, 5.8)) * 0.7;
+
+  // Warped UV per family
+  vec2 wuvA = wUV + vec2(wAx, wAy);
+  vec2 wuvB = wUV + vec2(wBx, wBy);
+
+  // Thread coordinate = perpendicular distance in warped space
+  float tA = ( wuvA.x + wuvA.y) * ROOT2_INV;
+  float tB = (-wuvB.x + wuvB.y) * ROOT2_INV;
+
+  // ── Per-thread random opacity (7–22%) and width (10–22% of spacing) ──────
   float hA_op = _hash1(floor(tA) * 57.3 + 11.7);
   float hA_w  = _hash1(floor(tA) * 29.1 + 83.4);
   float hB_op = _hash1(floor(tB) * 73.1 + 47.9);
   float hB_w  = _hash1(floor(tB) * 41.7 + 23.6);
 
-  float opA = mix(0.07, 0.22, hA_op);   // 7–22% white overlay per thread
+  float opA = mix(0.07, 0.22, hA_op);
   float opB = mix(0.07, 0.22, hB_op);
-  float wA  = mix(0.10, 0.22, hA_w);    // thread width fraction of spacing
+  float wA  = mix(0.10, 0.22, hA_w);
   float wB  = mix(0.10, 0.22, hB_w);
 
-  // Sub-pixel position jitter along thread (gridline() position noise equivalent)
-  float jA = _gnoise(wUV * 0.12)                    * 0.06;
-  float jB = _gnoise(wUV * 0.12 + vec2(5.1, 3.7))  * 0.06;
-
   // Fractional position within thread cycle [0..1]
-  float fA = fract(tA + jA);
-  float fB = fract(tB + jB);
+  float fA = fract(tA);
+  float fB = fract(tB);
 
-  // Anti-aliased thread mask — fixed sub-pixel soft edge
-  float aaW  = 0.025;
+  // Anti-aliased thread mask
+  float aaW   = 0.025;
   float lineA = smoothstep(0.0, aaW, fA) * (1.0 - smoothstep(wA, wA + aaW, fA));
   float lineB = smoothstep(0.0, aaW, fB) * (1.0 - smoothstep(wB, wB + aaW, fB));
 
-  // Composite white threads onto result — capped at 30% to stay subtle
+  // Composite white threads onto result — capped at 30%
   float weaveAlpha = clamp(lineA * opA + lineB * opB, 0.0, 0.30);
   result = mix(result, vec3(1.0), weaveAlpha);
 
