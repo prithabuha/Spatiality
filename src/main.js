@@ -84,7 +84,7 @@ const brushSmoothingValue = document.getElementById('brush-smoothing-value');
 
 function getPerformanceProfile() {
   const profiles = {
-    projection: { pixelRatioCap: 4.0,  simResolution: 2048, antialias: true  }, // 4K projector — maximum
+    projection: { pixelRatioCap: 4.0,  simResolution: 1024, antialias: true  }, // 4K projector — stable max (2048 causes WebGL OOM)
     high:       { pixelRatioCap: 2.0,  simResolution: 1024, antialias: true  },
     balanced:   { pixelRatioCap: 1.5,  simResolution: 768,  antialias: true  },
     fast:       { pixelRatioCap: 1.25, simResolution: 512,  antialias: false },

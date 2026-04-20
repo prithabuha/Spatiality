@@ -111,18 +111,19 @@ void main() {
   vec3 paperTex = texture2D(u_paperTex, paperUV).rgb;
 
   // Blend procedural Worley grain with the canvas fibre texture
-  // → Worley controls pigment trapping; canvas texture controls visual look.
-  float combinedGrain = paperGrain * 0.45 + paperTex.r * 0.55;
-  combinedGrain = pow(clamp(combinedGrain, 0.0, 1.0), 0.62);
+  // → canvas fibre texture weighted higher → more physical paper feel.
+  float combinedGrain = paperGrain * 0.30 + paperTex.r * 0.70;
+  combinedGrain = pow(clamp(combinedGrain, 0.0, 1.0), 0.55);
 
   // Grain intensifies as paint dries and settles into paper fibres
   float grainDryBoost2 = 1.0 + dryProgress * 0.35;
   combinedGrain = clamp(combinedGrain * grainDryBoost2, 0.0, 1.0);
 
-  // ── Watercolour paper surface — pure white cold-press ─────────────────────
-  // Real cotton-rag paper: pure white base, dark fiber valleys, bright ridges.
-  vec3 valleyCol = vec3(0.910, 0.910, 0.912);  // lighter valleys — reduce dark shadow at paint edges
-  vec3 ridgeCol  = vec3(0.990, 0.990, 0.992);  // near-white fiber ridges
+  // ── Watercolour paper surface — warm cotton-rag cold-press ───────────────
+  // Real cold-press paper: warm cream base, darker fibre valleys, bright ridges.
+  // Slightly warmer/darker valleys give grain more contrast through paint.
+  vec3 valleyCol = vec3(0.870, 0.858, 0.840);  // warm-grey valleys — visible paper grain
+  vec3 ridgeCol  = vec3(0.975, 0.968, 0.958);  // warm-white fibre ridges
   vec3 paperColor = mix(valleyCol, ridgeCol, combinedGrain);
 
   // Apply soft diffuse lighting to paper
@@ -188,11 +189,11 @@ void main() {
   // Thin-film absorption: exponential decay through pigment layer
   vec3 kmResult = Rinf + (canvas - Rinf) * exp(-b * thickness * 2.5);
 
-  // ── Paper grain break-up at low density ───────────────────────────────────
-  // Reduced breakup: paint stays visible at edges instead of vanishing.
-  // Paper texture shows through only at very low density washes.
-  float granule      = smoothstep(0.40, 0.80, combinedGrain);
-  float grainBreakup = granule * 0.10 * clamp(1.0 - density * 3.0, 0.0, 1.0);
+  // ── Paper grain break-up through paint ────────────────────────────────────
+  // Grain shows through at all densities — paper texture visible through paint.
+  // grainBreakup: stronger (0.28) and extends into medium-density washes.
+  float granule      = smoothstep(0.30, 0.75, combinedGrain);
+  float grainBreakup = granule * 0.28 * clamp(1.0 - density * 2.0, 0.0, 1.0);
   kmResult = mix(kmResult, canvas, grainBreakup);
 
   // ── Soft lighting on paint ────────────────────────────────────────────────
@@ -208,9 +209,11 @@ void main() {
   vec3 waterTint = vec3(0.008, 0.013, 0.020) * wetness;
   kmResult += waterTint * 0.12;
 
-  // ── Final blend: painted vs unpainted — border blur controlled by slider ──
+  // ── Final blend: painted vs unpainted — 20% translucency cap ─────────────
+  // kmBlend capped at 0.80 → paint is always 20% translucent, paper shows through.
+  // This is the defining watercolour quality: you can see the paper through the wash.
   float blurHigh = 0.012 + u_borderBlur * 0.10;  // 0=sharp(0.012), 1=soft(0.112)
-  float kmBlend  = smoothstep(0.001, blurHigh, density);
+  float kmBlend  = smoothstep(0.001, blurHigh, density) * 0.80;
   vec3 result = mix(canvas, kmResult, kmBlend);
 
   // Paper grain subtly visible even through paint (cold-press texture feel)
