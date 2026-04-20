@@ -1,36 +1,51 @@
 /**
- * PaperTexture — Generates a high-resolution cold-press watercolour paper texture.
+ * PaperTexture — 300 lb cold-press rough watercolour paper.
  *
- * Technique: pixel-by-pixel ImageData generation (runs once at load).
- * Combines anisotropic fiber noise, Worley cell structure, and micro-grain
- * to reproduce the characteristic look of Arches / Fabriano cotton rag paper.
+ * Reference descriptors:
+ *   Structure : "Deep tooth", "Coarse grain", "Fibrous", "Cold-press", "Handmade"
+ *   Appearance: "Matte", "Absorbent", "Archival"
+ *   Lighting  : "Raking light", "High-contrast"
  *
- * The result looks like the attached user reference image:
- *   • Very white base (~0.97)
- *   • Dense fibrous strands running diagonally / horizontally
- *   • Subtle dark valleys between fiber bundles
- *   • Organic, non-repeating structure
+ * Two-pass CPU generation (runs once at load):
+ *
+ *   Pass 1 — Height map
+ *     • Coarse Worley (scale 4)   — primary deep-tooth bumps (~250 px / cell)
+ *     • Medium Worley (scale 11)  — secondary grain structure
+ *     • Fine Worley   (scale 32)  — surface pitting
+ *     • Micro Worley  (scale 90)  — micro pores
+ *     • F₂−F₁ Worley ridge lines  — sharp grain-boundary highlight
+ *     • FBM-displaced fiber noise — organic winding paper-pulp fibres
+ *     • Macro FBM                 — handmade thickness variation
+ *
+ *   Pass 2 — Raking light
+ *     • Sobel surface normals from height field
+ *     • Directional light at ~15° elevation from upper-left
+ *       (raking = light nearly parallel to surface → long shadows)
+ *     • Luminance range: valley ≈ 0.26, lit ridge ≈ 0.98
+ *       (high-contrast as demanded by prompt)
  */
 
 import * as THREE from 'three';
 
 export function buildPaperTexture(size = 1024) {
-  // ── Deterministic hash ───────────────────────────────────────────────────────
+
+  // ── Deterministic hash ─────────────────────────────────────────────────────
   const h = (x, y) => {
     const v = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
     return v - Math.floor(v);
   };
 
-  // ── Smooth value noise ────────────────────────────────────────────────────────
+  // ── Smooth value noise ─────────────────────────────────────────────────────
   const vnoise = (x, y) => {
     const ix = Math.floor(x), iy = Math.floor(y);
-    const fx = x - ix, fy = y - iy;
-    const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
-    return (h(ix, iy)    * (1 - ux) + h(ix + 1, iy)    * ux) * (1 - uy) +
-           (h(ix, iy + 1) * (1 - ux) + h(ix + 1, iy + 1) * ux) * uy;
+    const fx = x - ix,        fy = y - iy;
+    const ux = fx * fx * (3 - 2 * fx);
+    const uy = fy * fy * (3 - 2 * fy);
+    return (h(ix,   iy)   * (1 - ux) + h(ix+1, iy)   * ux) * (1 - uy)
+         + (h(ix,   iy+1) * (1 - ux) + h(ix+1, iy+1) * ux) * uy;
   };
 
-  // ── FBM — used for large paper sizing variation ──────────────────────────────
+  // ── FBM (fractal Brownian motion) ──────────────────────────────────────────
   const fbm = (x, y, oct) => {
     let v = 0, amp = 0.5, freq = 1;
     for (let i = 0; i < oct; i++) {
@@ -40,83 +55,155 @@ export function buildPaperTexture(size = 1024) {
     return v;
   };
 
-  // ── Worley nearest-cell distance ─────────────────────────────────────────────
+  // ── Worley nearest-cell + second-nearest (F₁ and F₂) ─────────────────────
   const worley = (x, y, scale) => {
     const sx = x * scale, sy = y * scale;
     const ix = Math.floor(sx), iy = Math.floor(sy);
-    let minD = 999;
+    let f1 = 999, f2 = 999;
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
         const jx = ix + dx, jy = iy + dy;
         const cx = jx + h(jx + 17, jy + 3);
         const cy = jy + h(jy + 43, jx + 7);
         const d  = Math.sqrt((sx - cx) ** 2 + (sy - cy) ** 2);
-        minD = Math.min(minD, d);
+        if (d < f1) { f2 = f1; f1 = d; }
+        else if (d < f2) { f2 = d; }
       }
     }
-    return Math.min(minD / 0.85, 1.0);
+    return { f1: Math.min(f1 / 0.80, 1.0), f2: Math.min(f2 / 0.80, 1.0) };
   };
 
-  // ── Anisotropic fiber noise ───────────────────────────────────────────────────
-  // Stretch frequency in one axis to simulate long paper fibers.
-  // Three angle bands: 0° (H), 30°, -20° to mimic real fibre variation.
+  // ── FBM-displaced anisotropic fibre noise ─────────────────────────────────
+  // FBM warp makes fibres wind organically — matches real cotton-rag paper pulp.
   const fiberNoise = (ux, uy) => {
-    const f1 = vnoise(ux * 380, uy * 18);          // near-horizontal fibers
-    const f2 = vnoise(ux * 220 + 11, uy * 35 + 7); // gentle diagonal
-    const f3 = vnoise(ux * 160 + 5,  uy * 48 + 23);// slight vertical bundles
-    const f4 = vnoise(ux * 600 + 37, uy * 12 + 3); // very fine horizontal
+    // Domain warp: displace fibre coordinates by FBM
+    const wx = fbm(ux * 3.1,       uy * 3.1,       3) * 0.05;
+    const wy = fbm(ux * 3.1 + 5.2, uy * 3.1 + 1.3, 3) * 0.05;
 
-    // Cross-fiber texture: perpendicular to main fiber direction
-    const c1 = vnoise(ux * 28  + 13, uy * 310 + 5);
-    const c2 = vnoise(ux * 14  + 71, uy * 450 + 2);
+    // Primary long near-horizontal fibres (high anisotropy)
+    const f1 = vnoise((ux + wx) * 420 + 3,  (uy + wy) * 14);
+    const f2 = vnoise((ux + wx) * 290 + 11, (uy + wy) * 26 + 7);
+    const f3 = vnoise((ux + wy) * 180 + 23, (uy + wx) * 38 + 19);
 
-    return f1 * 0.30 + f2 * 0.22 + f3 * 0.18 + f4 * 0.14
-         + c1 * 0.10 + c2 * 0.06;
+    // Cross-fibres (perpendicular pulp bundles — "fibrous" descriptor)
+    const c1 = vnoise((ux + wy) * 22  + 13, (uy + wx) * 410 + 5);
+    const c2 = vnoise((ux + wx) * 11  + 71, (uy + wy) * 550 + 2);
+
+    // Fine fibre surface fuzz
+    const fuzz = vnoise((ux + wx) * 750 + 37, (uy + wy) * 8);
+
+    return f1 * 0.30 + f2 * 0.23 + f3 * 0.16
+         + c1 * 0.17 + c2 * 0.09 + fuzz * 0.05;
   };
 
-  // ── Allocate pixel buffer ─────────────────────────────────────────────────────
-  const canvas = document.createElement('canvas');
-  canvas.width  = size;
-  canvas.height = size;
-  const ctx  = canvas.getContext('2d');
-  const img  = ctx.createImageData(size, size);
-  const data = img.data;
+  // ──────────────────────────────────────────────────────────────────────────
+  // PASS 1 — Build normalised height field [0..1]
+  //          1 = ridge / bump peak   0 = deep valley
+  // ──────────────────────────────────────────────────────────────────────────
+  const heights = new Float32Array(size * size);
 
   for (let py = 0; py < size; py++) {
     const uy = py / size;
     for (let px = 0; px < size; px++) {
       const ux = px / size;
 
-      // Fiber structure (primary texture)
+      // Coarse Worley — primary deep-tooth bumps (300 lb rough cold-press)
+      const wC = worley(ux, uy,  4.0);
+      const wM = worley(ux, uy, 11.0);
+      const wF = worley(ux, uy, 32.0);
+      const wU = worley(ux, uy, 90.0);
+
+      // Cell-centre peaks: 1−F₁ raised to power → narrow bright ridges, flat dark valleys
+      const toothCoarse = Math.pow(1.0 - wC.f1, 3.5) * 0.42;  // deep tooth — dominant
+      const toothMed    = Math.pow(1.0 - wM.f1, 2.5) * 0.22;
+      const toothFine   = Math.pow(1.0 - wF.f1, 2.0) * 0.14;
+      const toothMicro  = (1.0 - wU.f1)              * 0.07;
+
+      // F₂−F₁ ridge lines — sharp bright edges at Voronoi cell boundaries
+      // This is the "deep grain edge" characteristic of cold-press paper
+      const edgeRidge = Math.min(wC.f2 - wC.f1, 1.0) * 0.11;
+
+      // Fibre texture (adds fibrous surface structure to bumps)
       const fiber = fiberNoise(ux, uy);
 
-      // Worley cells: coarse bundle gaps + fine single fibers + micro pits
-      const wCoarse = worley(ux, uy, 5.5);   // coarse paper structure
-      const wMedium = worley(ux, uy, 14.0);  // fiber bundle gaps
-      const wFine   = worley(ux, uy, 45.0);  // individual fiber cells
-      const wMicro  = worley(ux, uy, 120.0); // micro surface pitting
+      // Macro handmade variation — large-scale uneven pressing / thickness
+      const macro = fbm(ux * 1.8 + 0.4, uy * 1.8 + 0.9, 4);
 
-      // Macro paper thickness variation (non-uniform pressing)
-      const macro = fbm(ux * 2.8 + 0.5, uy * 2.8 + 0.3, 4);
+      // Combine: all contributions sum to ≈[0..1]
+      let height = toothCoarse + toothMed + toothFine + toothMicro
+                 + edgeRidge
+                 + fiber * 0.09
+                 + macro * 0.07;
 
-      // Combine: paper is mostly white; darken at fiber boundaries & valleys
-      // Higher values = brighter (ridge / fiber top)
-      const fiber_brightness = fiber * 0.35
-        + (1.0 - wCoarse) * 0.12
-        + (1.0 - wMedium) * 0.18
-        + (1.0 - wFine)   * 0.14
-        + (1.0 - wMicro)  * 0.06
-        + macro            * 0.15;
+      heights[py * size + px] = Math.min(1.0, Math.max(0.0, height));
+    }
+  }
 
-      // Normalise to [0..1] then map to nearly-white range [0.80..0.98]
-      let v = Math.pow(Math.max(0, Math.min(1, fiber_brightness)), 0.70);
-      v = 0.80 + v * 0.18;  // dark valleys ~0.80, bright ridges ~0.98
+  // ──────────────────────────────────────────────────────────────────────────
+  // PASS 2 — Raking light + final luminance
+  //
+  // "Raking light" = light nearly parallel to the surface.
+  // Light elevation ~15° → long shadows, very high valley/ridge contrast.
+  // Light direction: upper-left  (lx > 0, ly > 0, lz small)
+  // ──────────────────────────────────────────────────────────────────────────
+  const canvas  = document.createElement('canvas');
+  canvas.width  = size;
+  canvas.height = size;
+  const ctx  = canvas.getContext('2d');
+  const img  = ctx.createImageData(size, size);
+  const data = img.data;
 
-      const g = Math.round(Math.max(0, Math.min(1, v)) * 255);
-      const i = (py * size + px) * 4;
-      data[i]     = g;        // R
-      data[i + 1] = g;        // G (pure white/grey)
-      data[i + 2] = g + 1;   // B — very subtle cool tint (real cotton paper)
+  // Raking light vector (normalised): elevation ≈ 15°, azimuth ≈ 315° (upper-left)
+  // tan(15°) ≈ 0.268  →  lz/sqrt(lx²+ly²) = 0.268
+  const rawLx = 0.707, rawLy = 0.500, rawLz = 0.300;
+  const rLen = Math.sqrt(rawLx * rawLx + rawLy * rawLy + rawLz * rawLz);
+  const Lx = rawLx / rLen, Ly = rawLy / rLen, Lz = rawLz / rLen;
+
+  // Bump scale for normal calculation: higher = deeper apparent relief
+  const BUMP = 7.0;
+
+  for (let py = 0; py < size; py++) {
+    for (let px = 0; px < size; px++) {
+      const idx = py * size + px;
+
+      // Sobel normals — sample 2-pixel radius for smoother normals
+      const hR = heights[py * size + Math.min(px + 2, size - 1)];
+      const hL = heights[py * size + Math.max(px - 2, 0)];
+      const hU = heights[Math.max(py - 2, 0) * size + px];
+      const hD = heights[Math.min(py + 2, size - 1) * size + px];
+
+      let nx = (hL - hR) * BUMP;
+      let ny = (hU - hD) * BUMP;
+      let nz = 1.0;
+      const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
+      nx /= nLen; ny /= nLen; nz /= nLen;
+
+      // Lambertian raking diffuse + gentle ambient
+      const NdotL  = Math.max(0.0, nx * Lx + ny * Ly + nz * Lz);
+      const ambient = 0.22;                          // prevents pure-black valleys
+      const light   = ambient + (1.0 - ambient) * NdotL;
+
+      // Height → base luminance: valley=0.28, ridge-top=0.97
+      const h_val = heights[idx];
+      let v = 0.28 + Math.pow(h_val, 0.60) * 0.69;
+
+      // Apply raking light
+      v *= light;
+
+      // Mild gamma correction (makes midtones slightly lighter — matte paper feel)
+      v = Math.pow(Math.min(1.0, Math.max(0.0, v)), 0.88);
+
+      // Natural white: very slight warm cast on ridges, neutral in valleys
+      // Real archival cotton-rag paper reads as warm white under daylight.
+      const ridge = Math.pow(h_val, 2.0);            // 1 only at peak ridges
+      const r = Math.min(255, Math.round(v * 255) + Math.round(ridge * 3));
+      const g = Math.round(v * 255);
+      const b = Math.max(0,   Math.round(v * 255) - Math.round(ridge * 2));
+
+      const i = idx * 4;
+      data[i]     = r;
+      data[i + 1] = g;
+      data[i + 2] = b;
       data[i + 3] = 255;
     }
   }
@@ -124,12 +211,12 @@ export function buildPaperTexture(size = 1024) {
   ctx.putImageData(img, 0, 0);
 
   const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS     = THREE.RepeatWrapping;
-  tex.wrapT     = THREE.RepeatWrapping;
-  tex.anisotropy = 16;        // critical for large-screen sharpness at angles
-  tex.minFilter  = THREE.LinearMipmapLinearFilter;
-  tex.magFilter  = THREE.LinearFilter;
+  tex.wrapS        = THREE.RepeatWrapping;
+  tex.wrapT        = THREE.RepeatWrapping;
+  tex.anisotropy   = 16;
+  tex.minFilter    = THREE.LinearMipmapLinearFilter;
+  tex.magFilter    = THREE.LinearFilter;
   tex.generateMipmaps = true;
-  tex.needsUpdate = true;
+  tex.needsUpdate  = true;
   return tex;
 }
