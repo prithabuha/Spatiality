@@ -163,7 +163,7 @@ void main() {
   // High saturation expansion: pull away from grey toward pure hue.
   // This is how Tint gets its vibrant, luminous colour-on-paper feel.
   float luma = dot(paintHue, vec3(0.299, 0.587, 0.114));
-  vec3  vivid = mix(vec3(luma), paintHue, 1.95);  // strong saturation boost
+  vec3  vivid = mix(vec3(luma), paintHue, 2.60);  // stronger saturation — more pigmented
   vivid = clamp(vivid, 0.0, 1.0);
 
   // ── Kubelka-Munk thin-film reflectance ────────────────────────────────────
@@ -182,7 +182,7 @@ void main() {
 
   // K/S from paint hue — boosted absorption for saturated pigment
   vec3 ks = _kmReflToKS(vivid);
-  ks *= 2.2;  // high K (absorption), low S (scattering) → vivid colour
+  ks *= 3.0;  // higher absorption → deeper, richer pigment colour
 
   // Infinite-layer reflectance R∞ and extinction coefficient b
   vec3 Rinf = _kmKSToRefl(ks);
@@ -196,7 +196,7 @@ void main() {
   // grainBreakup 0.55: grain visible at all paint densities including thick strokes.
   // density * 0.85 → grain persists at high density (only fades at density > 1.17).
   float granule      = smoothstep(0.25, 0.70, combinedGrain);
-  float grainBreakup = granule * 0.55 * clamp(1.0 - density * 0.85, 0.0, 1.0);
+  float grainBreakup = granule * 0.28 * clamp(1.0 - density * 1.20, 0.0, 1.0);
   kmResult = mix(kmResult, canvas, grainBreakup);
 
   // ── Soft lighting on paint — grain modulates paint brightness ────────────
@@ -205,7 +205,7 @@ void main() {
   kmResult *= surfaceShade * lightOnPaint;
 
   // ── Wet dilution — water dilutes pigment concentration ────────────────────
-  float wetDilute = mix(1.0, 0.94, wetness * density);
+  float wetDilute = mix(1.0, 0.97, wetness * density);  // less wet dilution → colour holds
   kmResult *= wetDilute;
 
   // ── Water film shimmer — faint cool reflection on wet areas ───────────────
