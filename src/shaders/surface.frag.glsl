@@ -209,11 +209,14 @@ void main() {
   vec3 waterTint = vec3(0.008, 0.013, 0.020) * wetness;
   kmResult += waterTint * 0.12;
 
-  // ── Final blend: painted vs unpainted — 20% translucency cap ─────────────
-  // kmBlend capped at 0.80 → paint is always 20% translucent, paper shows through.
-  // This is the defining watercolour quality: you can see the paper through the wash.
+  // ── Final blend: 100% interior opacity, 30% transparent edges ────────────
+  // Paint interior is fully opaque (100%). Edge zone (density < 0.25) fades
+  // to a max of 70% — giving soft, organic watercolour edge feathering.
   float blurHigh = 0.012 + u_borderBlur * 0.10;  // 0=sharp(0.012), 1=soft(0.112)
-  float kmBlend  = smoothstep(0.001, blurHigh, density) * 0.80;
+  float rawBlend  = smoothstep(0.001, blurHigh, density);
+  // Ramp from 70% at the edge to 100% at density=0.25 (interior body)
+  float edgeFade  = mix(0.70, 1.0, smoothstep(blurHigh * 2.0, 0.25, density));
+  float kmBlend   = rawBlend * edgeFade;
   vec3 result = mix(canvas, kmResult, kmBlend);
 
   // Paper grain subtly visible even through paint (cold-press texture feel)
