@@ -108,16 +108,25 @@ export function buildPaperTexture(size = 1024) {
         + (1.0 - wMicro)  * 0.06
         + macro            * 0.15;
 
-      // Normalise to [0..1] then map to nearly-white range [0.80..0.98]
+      // Normalise to [0..1] then map to warm-white range matching #f9f7f1
+      // R:249 G:247 B:241 — warm cotton-rag paper base (no cool tint)
       let v = Math.pow(Math.max(0, Math.min(1, fiber_brightness)), 0.70);
       v = 0.80 + v * 0.18;  // dark valleys ~0.80, bright ridges ~0.98
 
-      const g = Math.round(Math.max(0, Math.min(1, v)) * 255);
-      const i = (py * size + px) * 4;
-      data[i]     = g;        // R
-      data[i + 1] = g;        // G (pure white/grey)
-      data[i + 2] = g + 1;   // B — very subtle cool tint (real cotton paper)
+      const vi = Math.max(0, Math.min(1, v));
+      const i  = (py * size + px) * 4;
+      // Warm white tint: R slightly high, B slightly low (matches #f9f7f1)
+      data[i]     = Math.round(vi * 249);  // R — warmest channel
+      data[i + 1] = Math.round(vi * 247);  // G
+      data[i + 2] = Math.round(vi * 241);  // B — least, gives warm cast
       data[i + 3] = 255;
+
+      // Per-pixel random grain (tooth) — subtract small noise from all channels
+      // Equivalent to: stroke(0,0,0, random(0,15)); point(x,y);
+      const tooth = Math.random() * 12;
+      data[i]     = Math.max(0, data[i]     - tooth);
+      data[i + 1] = Math.max(0, data[i + 1] - tooth);
+      data[i + 2] = Math.max(0, data[i + 2] - tooth);
     }
   }
 

@@ -124,8 +124,9 @@ void main() {
 
   // ── Watercolour paper surface — high-contrast warm cold-press ────────────
   // Darker valleys, brighter ridges → grain contrast clearly legible through paint.
-  vec3 valleyCol = vec3(0.780, 0.762, 0.742);  // deep warm-grey valleys — strong grain shadow
-  vec3 ridgeCol  = vec3(0.980, 0.972, 0.962);  // bright warm-white fibre ridges
+  // Base tint matches #f9f7f1 (R:249 G:247 B:241) — warm white cotton-rag paper
+  vec3 valleyCol = vec3(0.800, 0.780, 0.755);  // warm-grey valleys
+  vec3 ridgeCol  = vec3(0.976, 0.969, 0.945);  // #f9f7f1 warm-white ridges
   vec3 paperColor = mix(valleyCol, ridgeCol, combinedGrain);
 
   // Apply soft diffuse lighting to paper
@@ -207,6 +208,21 @@ void main() {
   // ── Wet dilution — water dilutes pigment concentration ────────────────────
   float wetDilute = mix(1.0, 0.97, wetness * density);  // less wet dilution → colour holds
   kmResult *= wetDilute;
+
+  // ── Edge darkening — pigment pools at drying stroke boundary ────────────
+  // Real watercolour: dissolved pigment migrates to the evaporation front,
+  // depositing a darker "tide mark" ring just inside the stroke edge.
+  // Peak darkening at density 0.06–0.20 (the transition ring).
+  float edgeRing   = smoothstep(0.005, 0.06, density)
+                   * (1.0 - smoothstep(0.06, 0.30, density));
+  kmResult *= 1.0 - edgeRing * 0.50;
+
+  // ── Multiply blend — paint absorbs light like real pigment on paper ───────
+  // ctx.globalCompositeOperation = 'multiply' equivalent:
+  // paint colour × paper colour → paint sinks into grain, deeper in valleys.
+  vec3  multiplyColor = kmResult * canvas;
+  float multiplyWeight = smoothstep(0.08, 0.55, density) * 0.30;
+  kmResult = mix(kmResult, multiplyColor, multiplyWeight);
 
   // ── Water film shimmer — faint cool reflection on wet areas ───────────────
   vec3 waterTint = vec3(0.008, 0.013, 0.020) * wetness;
