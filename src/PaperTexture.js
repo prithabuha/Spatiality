@@ -57,21 +57,27 @@ export function buildPaperTexture(size = 1024) {
     return Math.min(minD / 0.85, 1.0);
   };
 
-  // ── Anisotropic fiber noise ───────────────────────────────────────────────────
-  // Stretch frequency in one axis to simulate long paper fibers.
-  // Three angle bands: 0° (H), 30°, -20° to mimic real fibre variation.
-  const fiberNoise = (ux, uy) => {
-    const f1 = vnoise(ux * 380, uy * 18);          // near-horizontal fibers
-    const f2 = vnoise(ux * 220 + 11, uy * 35 + 7); // gentle diagonal
-    const f3 = vnoise(ux * 160 + 5,  uy * 48 + 23);// slight vertical bundles
-    const f4 = vnoise(ux * 600 + 37, uy * 12 + 3); // very fine horizontal
+  // ── Isotropic rotated-FBM noise ──────────────────────────────────────────────
+  // 5 octaves each rotated by a different angle → no preferred direction.
+  // Produces organic random bumps like real cold-press paper tooth,
+  // not directional fibre streaks.
+  const rot2 = (x, y, a) => {
+    const c = Math.cos(a), s = Math.sin(a);
+    return [c * x - s * y, s * x + c * y];
+  };
 
-    // Cross-fiber texture: perpendicular to main fiber direction
-    const c1 = vnoise(ux * 28  + 13, uy * 310 + 5);
-    const c2 = vnoise(ux * 14  + 71, uy * 450 + 2);
-
-    return f1 * 0.30 + f2 * 0.22 + f3 * 0.18 + f4 * 0.14
-         + c1 * 0.10 + c2 * 0.06;
+  const isotropicNoise = (ux, uy) => {
+    // Rotation angles spread across 0–180° (0, 37°, 79°, 123°, 167°)
+    const [a0x, a0y] = rot2(ux * 42,  uy * 42,  0.000);
+    const [a1x, a1y] = rot2(ux * 90,  uy * 90,  0.646);
+    const [a2x, a2y] = rot2(ux * 190, uy * 190, 1.379);
+    const [a3x, a3y] = rot2(ux * 400, uy * 400, 2.147);
+    const [a4x, a4y] = rot2(ux * 840, uy * 840, 2.914);
+    return vnoise(a0x, a0y) * 0.40
+         + vnoise(a1x, a1y) * 0.27
+         + vnoise(a2x, a2y) * 0.17
+         + vnoise(a3x, a3y) * 0.10
+         + vnoise(a4x, a4y) * 0.06;
   };
 
   // ── Allocate pixel buffer ─────────────────────────────────────────────────────
@@ -87,26 +93,25 @@ export function buildPaperTexture(size = 1024) {
     for (let px = 0; px < size; px++) {
       const ux = px / size;
 
-      // Fiber structure (primary texture)
-      const fiber = fiberNoise(ux, uy);
+      // Isotropic surface noise — no directional streaks
+      const iso = isotropicNoise(ux, uy);
 
-      // Worley cells: coarse bundle gaps + fine single fibers + micro pits
-      const wCoarse = worley(ux, uy, 5.5);   // coarse paper structure
-      const wMedium = worley(ux, uy, 14.0);  // fiber bundle gaps
-      const wFine   = worley(ux, uy, 45.0);  // individual fiber cells
-      const wMicro  = worley(ux, uy, 120.0); // micro surface pitting
+      // Worley cells: coarse bump gaps + fine surface pitting
+      const wCoarse = worley(ux, uy, 5.5);
+      const wMedium = worley(ux, uy, 14.0);
+      const wFine   = worley(ux, uy, 45.0);
+      const wMicro  = worley(ux, uy, 120.0);
 
-      // Macro paper thickness variation (non-uniform pressing)
+      // Macro paper thickness variation (handmade feel)
       const macro = fbm(ux * 2.8 + 0.5, uy * 2.8 + 0.3, 4);
 
-      // Combine: paper is mostly white; darken at fiber boundaries & valleys
-      // Higher values = brighter (ridge / fiber top)
-      const fiber_brightness = fiber * 0.35
-        + (1.0 - wCoarse) * 0.12
+      // Combine: Perlin FBM dominant, Worley adds large-scale cell structure
+      const fiber_brightness = iso * 0.38
+        + (1.0 - wCoarse) * 0.13
         + (1.0 - wMedium) * 0.18
         + (1.0 - wFine)   * 0.14
         + (1.0 - wMicro)  * 0.06
-        + macro            * 0.15;
+        + macro            * 0.11;
 
       // Normalise to [0..1] then map to warm-white range matching #f9f7f1
       // R:249 G:247 B:241 — warm cotton-rag paper base (no cool tint)

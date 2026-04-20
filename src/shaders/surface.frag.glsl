@@ -92,19 +92,47 @@ void main() {
   vec3  bumpN = normalize(N + vec3(-dhdx, -dhdy, 0.0));
   N = normalize(mix(N, bumpN, 0.50));
 
+  // ── Paper tooth normal map — grain peaks catch the light ─────────────────
+  // Sample u_paperTex at ±2 texels → finite-difference surface normals.
+  // The paper texture is isotropic Perlin FBM (no directional fibre lines),
+  // so these normals represent genuine random bumps, not a grid.
+  vec2 earlyPaperUV = vUv * u_paperTexScale;
+  float ptOfs = 2.0 / 1024.0;  // 2-texel step in paper texture UV space
+  float pt_R  = texture2D(u_paperTex, earlyPaperUV + vec2(ptOfs, 0.0)).r;
+  float pt_L  = texture2D(u_paperTex, earlyPaperUV - vec2(ptOfs, 0.0)).r;
+  float pt_U  = texture2D(u_paperTex, earlyPaperUV + vec2(0.0, ptOfs)).r;
+  float pt_D  = texture2D(u_paperTex, earlyPaperUV - vec2(0.0, ptOfs)).r;
+  float pt_dpdx = (pt_R - pt_L) * 3.5;
+  float pt_dpdy = (pt_U - pt_D) * 3.5;
+  vec3  paperToothN = normalize(N + vec3(-pt_dpdx, -pt_dpdy, 0.0));
+  N = normalize(mix(N, paperToothN, 0.50));
+
   // ── Soft continuous lighting — NO toon steps ──────────────────────────────
   // Smooth diffuse wrap: light wraps around surface for watercolour softness.
   // No harsh shadows, no stepped banding — just gentle luminance variation.
   float NdotL = dot(N, L);
   float diffuse = clamp(NdotL * 0.40 + 0.60, 0.0, 1.0);  // wide wrap
 
-  // ── Multi-scale paper grain — enlarged for visible cold-press texture ───────
-  // Frequencies halved vs previous → grain ~2–3× larger, clearly legible.
+  // ── Isotropic paper grain — rotated Perlin FBM, no directional axis ────────
+  // Each octave rotated by a different angle → no grid, no straight lines.
+  // Matches: "use a Perlin noise displacement map instead of a grid."
+  // mat2(cos,-sin, sin,cos) rotation applied before each gnoise sample.
   float coarseGrain = hC;
-  float fineGrain   = _gnoise(vUv * 30.0) * 0.5 + 0.5;   // was 82  → large bumps
-  float microGrain  = _gnoise(vUv * 75.0 + vec2(17.3, 43.7)) * 0.5 + 0.5; // was 220 → medium ridges
-  float paperGrain  = coarseGrain * 0.55 + fineGrain * 0.35 + microGrain * 0.10;
-  paperGrain        = pow(paperGrain, 0.55);  // lower power → more contrast
+
+  mat2 gr1 = mat2( 0.7986,  0.6020, -0.6020,  0.7986);  //  37° — medium bumps
+  mat2 gr2 = mat2( 0.1908,  0.9816, -0.9816,  0.1908);  //  79° — fine peaks
+  mat2 gr3 = mat2(-0.5446,  0.8387, -0.8387, -0.5446);  // 123° — micro pits
+  mat2 gr4 = mat2(-0.9744,  0.2250, -0.2250, -0.9744);  // 167° — ultra-fine
+
+  float paperFBM = (_gnoise(       vUv  * 28.0) * 0.40
+                  + _gnoise(gr1  * vUv  * 62.0) * 0.27
+                  + _gnoise(gr2  * vUv  * 138.0) * 0.18
+                  + _gnoise(gr3  * vUv  * 305.0) * 0.10
+                  + _gnoise(gr4  * vUv  * 670.0) * 0.05)
+                  * 0.5 + 0.5;
+
+  float paperGrain = coarseGrain * 0.50 + paperFBM * 0.50;
+  paperGrain       = pow(paperGrain, 0.55);
 
   // (grainDryBoost applied below with combined texture)
 
@@ -261,52 +289,6 @@ void main() {
   float dotOpacity = mix(0.020, 0.059,                 // stroke(0,0,0, 5–15)
     _hash1(toothCell.x * 19.3 + toothCell.y * 83.1));
   result = mix(result, vec3(0.0), hasDot * dotOpacity);
-
-  // ── Canvas weave overlay — crosshatch thread structure ───────────────────
-  //
-  // Two families of diagonal threads at 45° / 135°, matching the Processing
-  // technique from the DiVerdi watercolour paper:
-  //   • grid lines drawn at ±45° with spacing ~5 px
-  //   • each line subdivided into short segments; opacity, width and position
-  //     varied per-thread via deterministic hash (≈ random(20,50) alpha)
-  //   • overlaid as low-opacity white — visible on both paper and painted areas
-  //
-  // wUV controls thread density: 155 cycles across UV → ~5-6 px at 4 K.
-  vec2  wUV = vUv * 155.0;
-  float ROOT2_INV = 0.70711;
-
-  // Perpendicular coordinate for each thread family
-  float tA = ( wUV.x + wUV.y) * ROOT2_INV;  //  45° family
-  float tB = (-wUV.x + wUV.y) * ROOT2_INV;  // 135° family
-
-  // Per-thread random opacity (7–22%) and width (10–22% of spacing)
-  // Seeded from integer thread index → different every thread, same every frame
-  float hA_op = _hash1(floor(tA) * 57.3 + 11.7);
-  float hA_w  = _hash1(floor(tA) * 29.1 + 83.4);
-  float hB_op = _hash1(floor(tB) * 73.1 + 47.9);
-  float hB_w  = _hash1(floor(tB) * 41.7 + 23.6);
-
-  float opA = mix(0.07, 0.22, hA_op);   // 7–22% white overlay per thread
-  float opB = mix(0.07, 0.22, hB_op);
-  float wA  = mix(0.10, 0.22, hA_w);    // thread width fraction of spacing
-  float wB  = mix(0.10, 0.22, hB_w);
-
-  // Sub-pixel position jitter along thread (gridline() position noise equivalent)
-  float jA = _gnoise(wUV * 0.12)                    * 0.06;
-  float jB = _gnoise(wUV * 0.12 + vec2(5.1, 3.7))  * 0.06;
-
-  // Fractional position within thread cycle [0..1]
-  float fA = fract(tA + jA);
-  float fB = fract(tB + jB);
-
-  // Anti-aliased thread mask — fixed sub-pixel soft edge
-  float aaW  = 0.025;
-  float lineA = smoothstep(0.0, aaW, fA) * (1.0 - smoothstep(wA, wA + aaW, fA));
-  float lineB = smoothstep(0.0, aaW, fB) * (1.0 - smoothstep(wB, wB + aaW, fB));
-
-  // Composite white threads onto result — capped at 30% to stay subtle
-  float weaveAlpha = clamp(lineA * opA + lineB * opB, 0.0, 0.30);
-  result = mix(result, vec3(1.0), weaveAlpha);
 
   gl_FragColor = vec4(clamp(result, vec3(0.0), vec3(1.0)), 1.0);
 }
