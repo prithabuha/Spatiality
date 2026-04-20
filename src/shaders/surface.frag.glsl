@@ -227,6 +227,25 @@ void main() {
   float midDensity = kmBlend * (1.0 - kmBlend) * 2.0;
   result = mix(result, result * (0.88 + paperGrain * 0.26), midDensity * 0.80);
 
+  // ── Paper tooth — tiny dark speckle dots ──────────────────────────────────
+  //
+  // Direct port of the Processing setup() technique:
+  //   for (int i = 0; i < 50000; i++) {
+  //     stroke(0, 0, 0, random(5, 15));
+  //     point(random(width), random(height));  // width = height = 400
+  //   }
+  //
+  // 50 000 dots on 400×400 = 0.3125 dots/px → ~31.25% of cells are dotted.
+  // Each dot darkens by opacity 5–15 / 255 ≈ 0.020–0.059 (2–6% black).
+  // Using floor(vUv * 400) maps one UV cell to one "Processing pixel".
+  // Both paper and painted areas receive the tooth — it's a surface property.
+  vec2  toothCell  = floor(vUv * 400.0);
+  float toothHash  = _hash1(toothCell.x * 73.1  + toothCell.y * 37.7);
+  float hasDot     = step(0.6875, toothHash);          // 31.25% density
+  float dotOpacity = mix(0.020, 0.059,                 // stroke(0,0,0, 5–15)
+    _hash1(toothCell.x * 19.3 + toothCell.y * 83.1));
+  result = mix(result, vec3(0.0), hasDot * dotOpacity);
+
   // ── Canvas weave overlay — crosshatch thread structure ───────────────────
   //
   // Two families of diagonal threads at 45° / 135°, matching the Processing
