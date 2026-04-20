@@ -96,12 +96,13 @@ void main() {
   float NdotL = dot(N, L);
   float diffuse = clamp(NdotL * 0.40 + 0.60, 0.0, 1.0);  // wide wrap
 
-  // ── Multi-scale paper grain (cold-press watercolour paper) ────────────────
+  // ── Multi-scale paper grain — enlarged for visible cold-press texture ───────
+  // Frequencies halved vs previous → grain ~2–3× larger, clearly legible.
   float coarseGrain = hC;
-  float fineGrain   = _gnoise(vUv * 82.0) * 0.5 + 0.5;
-  float microGrain  = _gnoise(vUv * 220.0 + vec2(17.3, 43.7)) * 0.5 + 0.5;
-  float paperGrain  = coarseGrain * 0.50 + fineGrain * 0.32 + microGrain * 0.18;
-  paperGrain        = pow(paperGrain, 0.60);
+  float fineGrain   = _gnoise(vUv * 30.0) * 0.5 + 0.5;   // was 82  → large bumps
+  float microGrain  = _gnoise(vUv * 75.0 + vec2(17.3, 43.7)) * 0.5 + 0.5; // was 220 → medium ridges
+  float paperGrain  = coarseGrain * 0.55 + fineGrain * 0.35 + microGrain * 0.10;
+  paperGrain        = pow(paperGrain, 0.55);  // lower power → more contrast
 
   // (grainDryBoost applied below with combined texture)
 
@@ -113,17 +114,16 @@ void main() {
   // Blend procedural Worley grain with the canvas fibre texture
   // → canvas fibre texture weighted higher → more physical paper feel.
   float combinedGrain = paperGrain * 0.30 + paperTex.r * 0.70;
-  combinedGrain = pow(clamp(combinedGrain, 0.0, 1.0), 0.55);
+  combinedGrain = pow(clamp(combinedGrain, 0.0, 1.0), 0.45);  // lower power → crispier grain peaks
 
   // Grain intensifies as paint dries and settles into paper fibres
   float grainDryBoost2 = 1.0 + dryProgress * 0.35;
   combinedGrain = clamp(combinedGrain * grainDryBoost2, 0.0, 1.0);
 
-  // ── Watercolour paper surface — warm cotton-rag cold-press ───────────────
-  // Real cold-press paper: warm cream base, darker fibre valleys, bright ridges.
-  // Slightly warmer/darker valleys give grain more contrast through paint.
-  vec3 valleyCol = vec3(0.870, 0.858, 0.840);  // warm-grey valleys — visible paper grain
-  vec3 ridgeCol  = vec3(0.975, 0.968, 0.958);  // warm-white fibre ridges
+  // ── Watercolour paper surface — high-contrast warm cold-press ────────────
+  // Darker valleys, brighter ridges → grain contrast clearly legible through paint.
+  vec3 valleyCol = vec3(0.780, 0.762, 0.742);  // deep warm-grey valleys — strong grain shadow
+  vec3 ridgeCol  = vec3(0.980, 0.972, 0.962);  // bright warm-white fibre ridges
   vec3 paperColor = mix(valleyCol, ridgeCol, combinedGrain);
 
   // Apply soft diffuse lighting to paper
@@ -190,14 +190,15 @@ void main() {
   vec3 kmResult = Rinf + (canvas - Rinf) * exp(-b * thickness * 2.5);
 
   // ── Paper grain break-up through paint ────────────────────────────────────
-  // Grain shows through at all densities — paper texture visible through paint.
-  // grainBreakup: stronger (0.28) and extends into medium-density washes.
-  float granule      = smoothstep(0.30, 0.75, combinedGrain);
-  float grainBreakup = granule * 0.28 * clamp(1.0 - density * 2.0, 0.0, 1.0);
+  // Grain clearly shows even through dense paint — valley fibres punch through.
+  // grainBreakup 0.55: grain visible at all paint densities including thick strokes.
+  // density * 0.85 → grain persists at high density (only fades at density > 1.17).
+  float granule      = smoothstep(0.25, 0.70, combinedGrain);
+  float grainBreakup = granule * 0.55 * clamp(1.0 - density * 0.85, 0.0, 1.0);
   kmResult = mix(kmResult, canvas, grainBreakup);
 
-  // ── Soft lighting on paint ────────────────────────────────────────────────
-  float surfaceShade = 0.88 + combinedGrain * 0.16;
+  // ── Soft lighting on paint — grain modulates paint brightness ────────────
+  float surfaceShade = 0.84 + combinedGrain * 0.26;  // wider range → grain pops through paint
   float lightOnPaint = NdotL * 0.15 + 0.92;
   kmResult *= surfaceShade * lightOnPaint;
 
@@ -219,9 +220,10 @@ void main() {
   float kmBlend   = rawBlend * edgeFade;
   vec3 result = mix(canvas, kmResult, kmBlend);
 
-  // Paper grain subtly visible even through paint (cold-press texture feel)
+  // Paper grain clearly visible through paint — cold-press texture character
+  // Higher coefficients → grain remains legible even at medium-to-high densities.
   float midDensity = kmBlend * (1.0 - kmBlend) * 2.0;
-  result = mix(result, result * (0.92 + paperGrain * 0.10), midDensity * 0.40);
+  result = mix(result, result * (0.88 + paperGrain * 0.26), midDensity * 0.80);
 
   gl_FragColor = vec4(clamp(result, vec3(0.0), vec3(1.0)), 1.0);
 }
