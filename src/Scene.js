@@ -34,9 +34,9 @@ export class Scene {
     this.camera.lookAt(0, 3.0, 0);
 
     // ── Paper texture (generated once, shared across all surfaces) ──────────
-    // 2048px: sharp at 4K with anisotropic filtering; two-pass raking-light gen.
+    // Build at 1024px — high enough for 4K projection, low enough to not stall.
     console.time('[Paper] texture generate');
-    this._paperTex = buildPaperTexture(2048);
+    this._paperTex = buildPaperTexture(1024);
     console.timeEnd('[Paper] texture generate');
 
     // ── Scene ────────────────────────────────────────────────────────────────
