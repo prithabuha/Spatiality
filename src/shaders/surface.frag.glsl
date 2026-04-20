@@ -35,6 +35,8 @@ uniform vec2  u_paperTexScale;  // UV repeat scale per surface
 uniform float u_borderBlur;     // 0=sharp edge, 1=very soft dissolve
 
 // ── Noise ────────────────────────────────────────────────────────────────────
+float _hash1(float n) { return fract(sin(n) * 43758.5453123); }
+
 vec2 _h2(vec2 p) {
   p = vec2(dot(p,vec2(127.1,311.7)), dot(p,vec2(269.5,183.3)));
   return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
@@ -224,6 +226,52 @@ void main() {
   // Higher coefficients → grain remains legible even at medium-to-high densities.
   float midDensity = kmBlend * (1.0 - kmBlend) * 2.0;
   result = mix(result, result * (0.88 + paperGrain * 0.26), midDensity * 0.80);
+
+  // ── Canvas weave overlay — crosshatch thread structure ───────────────────
+  //
+  // Two families of diagonal threads at 45° / 135°, matching the Processing
+  // technique from the DiVerdi watercolour paper:
+  //   • grid lines drawn at ±45° with spacing ~5 px
+  //   • each line subdivided into short segments; opacity, width and position
+  //     varied per-thread via deterministic hash (≈ random(20,50) alpha)
+  //   • overlaid as low-opacity white — visible on both paper and painted areas
+  //
+  // wUV controls thread density: 155 cycles across UV → ~5-6 px at 4 K.
+  vec2  wUV = vUv * 155.0;
+  float ROOT2_INV = 0.70711;
+
+  // Perpendicular coordinate for each thread family
+  float tA = ( wUV.x + wUV.y) * ROOT2_INV;  //  45° family
+  float tB = (-wUV.x + wUV.y) * ROOT2_INV;  // 135° family
+
+  // Per-thread random opacity (7–22%) and width (10–22% of spacing)
+  // Seeded from integer thread index → different every thread, same every frame
+  float hA_op = _hash1(floor(tA) * 57.3 + 11.7);
+  float hA_w  = _hash1(floor(tA) * 29.1 + 83.4);
+  float hB_op = _hash1(floor(tB) * 73.1 + 47.9);
+  float hB_w  = _hash1(floor(tB) * 41.7 + 23.6);
+
+  float opA = mix(0.07, 0.22, hA_op);   // 7–22% white overlay per thread
+  float opB = mix(0.07, 0.22, hB_op);
+  float wA  = mix(0.10, 0.22, hA_w);    // thread width fraction of spacing
+  float wB  = mix(0.10, 0.22, hB_w);
+
+  // Sub-pixel position jitter along thread (gridline() position noise equivalent)
+  float jA = _gnoise(wUV * 0.12)                    * 0.06;
+  float jB = _gnoise(wUV * 0.12 + vec2(5.1, 3.7))  * 0.06;
+
+  // Fractional position within thread cycle [0..1]
+  float fA = fract(tA + jA);
+  float fB = fract(tB + jB);
+
+  // Anti-aliased thread mask — fixed sub-pixel soft edge
+  float aaW  = 0.025;
+  float lineA = smoothstep(0.0, aaW, fA) * (1.0 - smoothstep(wA, wA + aaW, fA));
+  float lineB = smoothstep(0.0, aaW, fB) * (1.0 - smoothstep(wB, wB + aaW, fB));
+
+  // Composite white threads onto result — capped at 30% to stay subtle
+  float weaveAlpha = clamp(lineA * opA + lineB * opB, 0.0, 0.30);
+  result = mix(result, vec3(1.0), weaveAlpha);
 
   gl_FragColor = vec4(clamp(result, vec3(0.0), vec3(1.0)), 1.0);
 }
