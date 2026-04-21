@@ -57,6 +57,9 @@ export class GPGPUWatercolor {
              new THREE.WebGLRenderTarget(simRes, simRes, rtBase)];
     this._velIdx = 0;
     this._pigIdx = 0;
+    // Queue of brush positions collected during a frame; processed as sub-steps
+    // in update() so every interpolated stamp gets its own GPU render pair.
+    this._pendingStrokes = [];
 
     // Static substrate texture (CPU-generated paper grain)
     this.substrateRT = this._buildSubstrate(simRes >= 512 ? 256 : 192, texType, rtBase);
@@ -277,6 +280,33 @@ export class GPGPUWatercolor {
     return { texture: tex };
   }
 
+  // ── Internal: execute one vel+pig render pair ──────────────────────────────
+  // Called once per sub-step inside update().  Handles ping-pong internally.
+  _runPasses(dt, painting) {
+    const vRead  = this._velIdx;
+    const vWrite = 1 - this._velIdx;
+    this.velUniforms.tVelocity.value  = this.velRT[vRead].texture;
+    this.velUniforms.u_dt.value       = dt;
+    this.velUniforms.u_painting.value = painting;
+    this.renderer.setRenderTarget(this.velRT[vWrite]);
+    this.renderer.render(this._velScene, this._camera);
+    this._velIdx = vWrite;
+
+    const pRead  = this._pigIdx;
+    const pWrite = 1 - this._pigIdx;
+    this.pigUniforms.tPigment.value   = this.pigRT[pRead].texture;
+    this.pigUniforms.tVelocity.value  = this.velRT[vWrite].texture;
+    this.pigUniforms.u_dt.value       = dt;
+    this.pigUniforms.u_painting.value = painting;
+    this.renderer.setRenderTarget(this.pigRT[pWrite]);
+    this.renderer.render(this._pigScene, this._camera);
+    this._pigIdx = pWrite;
+
+    this.renderer.setRenderTarget(null);
+    this.outputTexture    = this.pigRT[this._pigIdx].texture;
+    this.velOutputTexture = this.velRT[this._velIdx].texture;
+  }
+
   // ── Notify the engine that a brush stroke just occurred ────────────────────
   // Call this each frame that gpgpu.paint() is called.
   // Resets the CPU-side global drying clock so u_isDrying / u_dryProgress
@@ -319,12 +349,9 @@ export class GPGPUWatercolor {
     this.pigUniforms.u_brushRadius.value = this.uniforms.u_brushSize.value;
     this.pigUniforms.u_time.value        = time;
 
-    // ── Sync stochastic splat seed (deterministic per frame) ───────────────
-    // Same seed in both passes → water and pigment deposits are co-located.
+    // ── Splat seed base (varied per-stamp in the render loop below) ───────────
     const splatSeed = (this._totalTime * 7.31) % 1000.0;
-    this.velUniforms.u_splatSeed.value = splatSeed;
-    this.pigUniforms.u_splatSeed.value = splatSeed;
-    // Sync splatSpread from uniforms bag
+    // Sync splatSpread (shared across all stamps in a frame)
     this.velUniforms.u_splatSpread.value = this.uniforms.u_splatSpread.value;
     this.pigUniforms.u_splatSpread.value = this.uniforms.u_splatSpread.value;
 
@@ -340,44 +367,45 @@ export class GPGPUWatercolor {
       }
     }
 
-    // ── Pass 1: Velocity ───────────────────────────────────────────────────
-    const vRead  = this._velIdx;
-    const vWrite = 1 - this._velIdx;
-    this.velUniforms.tVelocity.value = this.velRT[vRead].texture;
-    this.velUniforms.u_dt.value      = clampedDt;
-    this.velUniforms.u_painting.value = this.uniforms.u_painting.value;
+    // ── Sub-step rendering: one GPU pair per queued brush position ────────────
+    // Each paint() call queued a position.  We now render them in order so
+    // every interpolated stamp actually hits the GPU — fixing gaps at high speed.
+    // dt is split evenly so the total physics effect per frame stays correct.
+    const strokes = this._pendingStrokes;
 
-    this.renderer.setRenderTarget(this.velRT[vWrite]);
-    this.renderer.render(this._velScene, this._camera);
-    this._velIdx = vWrite;
-
-    // ── Pass 2: Pigment ────────────────────────────────────────────────────
-    const pRead  = this._pigIdx;
-    const pWrite = 1 - this._pigIdx;
-    this.pigUniforms.tPigment.value  = this.pigRT[pRead].texture;
-    this.pigUniforms.tVelocity.value = this.velRT[vWrite].texture;
-    this.pigUniforms.u_dt.value      = clampedDt;
-    this.pigUniforms.u_painting.value = this.uniforms.u_painting.value;
-
-    this.renderer.setRenderTarget(this.pigRT[pWrite]);
-    this.renderer.render(this._pigScene, this._camera);
-    this._pigIdx = pWrite;
-
-    this.renderer.setRenderTarget(null);
-    this.outputTexture    = this.pigRT[this._pigIdx].texture;
-    this.velOutputTexture = this.velRT[this._velIdx].texture;
+    if (strokes.length === 0) {
+      // No painting this frame: one physics-only pass (drying / gravity / etc.)
+      this.velUniforms.u_splatSeed.value = splatSeed;
+      this.pigUniforms.u_splatSeed.value = splatSeed;
+      this._runPasses(clampedDt, 0.0);
+    } else {
+      const subDt = clampedDt / strokes.length;
+      for (let i = 0; i < strokes.length; i++) {
+        const { u, v } = strokes[i];
+        this.velUniforms.u_brushUV.value.set(u, v);
+        this.pigUniforms.u_brushUV.value.set(u, v);
+        // Vary splat seed per stamp → unique stochastic splat patterns per step
+        const stepSeed = (splatSeed + i * 13.73) % 1000.0;
+        this.velUniforms.u_splatSeed.value = stepSeed;
+        this.pigUniforms.u_splatSeed.value = stepSeed;
+        this._runPasses(subDt, 1.0);
+      }
+      this._pendingStrokes = [];
+    }
 
     // Reset paint flag
-    this.uniforms.u_painting.value = 0.0;
+    this.uniforms.u_painting.value    = 0.0;
     this.velUniforms.u_painting.value = 0.0;
     this.pigUniforms.u_painting.value = 0.0;
   }
 
   // ── Stamp a brush at surface UV (u, v) ─────────────────────────────────────
+  // Shared options (color, size, water, …) are applied immediately to the
+  // uniforms.  The position (u, v) is queued; update() will sub-step through
+  // all queued positions, giving each its own GPU render pair so no stamp
+  // is ever skipped — even at full-speed fast swipes.
   paint(u, v, options = {}) {
-    this.velUniforms.u_brushUV.value.set(u, v);
-    this.pigUniforms.u_brushUV.value.set(u, v);
-
+    // Set shared (non-position) uniforms — same for all stamps in a stroke.
     if (options.color) {
       this.pigUniforms.u_color.value.set(options.color.r, options.color.g, options.color.b);
     }
@@ -398,6 +426,9 @@ export class GPGPUWatercolor {
     if (options.waterAmount  !== undefined) this.pigUniforms.u_waterAmount.value= options.waterAmount;
 
     this.uniforms.u_painting.value = 1.0;
+
+    // Queue this position — update() will render a GPU pass for each entry.
+    this._pendingStrokes.push({ u, v });
   }
 
   // ── Trigger expanding ripple (wave-clear animation) ────────────────────────

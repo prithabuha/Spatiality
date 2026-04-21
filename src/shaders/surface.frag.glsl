@@ -146,8 +146,8 @@ void main() {
   float combinedGrain = paperGrain * 0.30 + paperTex.r * 0.70;
   combinedGrain = pow(clamp(combinedGrain, 0.0, 1.0), 0.45);  // lower power → crispier grain peaks
 
-  // Grain intensifies as paint dries and settles into paper fibres
-  float grainDryBoost2 = 1.0 + dryProgress * 0.35;
+  // Grain intensifies slightly as paint dries — kept minimal to avoid perceived fading
+  float grainDryBoost2 = 1.0 + dryProgress * 0.05;
   combinedGrain = clamp(combinedGrain * grainDryBoost2, 0.0, 1.0);
 
   // ── Watercolour paper surface — high-contrast warm cold-press ────────────
@@ -166,12 +166,12 @@ void main() {
   float sheenFactor = (1.0 - dryProgress) * wetness;
 
   // Smooth Blinn-Phong specular — wet paper glistens gently
-  float spec = pow(NdotH, 64.0) * 0.18 * sheenFactor;
+  float spec = pow(NdotH, 64.0) * 0.06 * sheenFactor;
   // Fresnel rim on wet edges
-  float fresnel = pow(1.0 - NdotV, 3.5) * sheenFactor * 0.10;
+  float fresnel = pow(1.0 - NdotV, 3.5) * sheenFactor * 0.04;
 
   vec4  paintDataSheen = texture2D(tPaint, simUV);
-  float densitySheen   = clamp(paintDataSheen.a * 2.5 + 0.15, 0.0, 1.0);
+  float densitySheen   = clamp(paintDataSheen.a * 2.5, 0.0, 1.0);
   canvas += (spec + fresnel) * densitySheen;
 
   // ── Paint UV lookup ───────────────────────────────────────────────────────

@@ -650,9 +650,11 @@ function doPaint(normX, normY, input = {}) {
 
   if (lastUV && lastSurface === hit.surfaceId) {
     const dist = Math.hypot(hit.u - lastUV.u, hit.v - lastUV.v);
-    const steps = dist < 0.0012
-      ? 1
-      : THREE.MathUtils.clamp(Math.ceil(dist * 220), 2, 9);
+    // Step every ~40% of the brush radius so strokes are gapless even at speed.
+    // Small brushes automatically get more steps than large ones.
+    // Max 20 GPU pairs per frame — fast fingers can cover the full wall without lag.
+    const stepsNeeded = dist < 0.001 ? 1 : Math.ceil(dist / (dynamicSize * 0.40));
+    const steps = THREE.MathUtils.clamp(stepsNeeded, 1, 20);
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
       gpgpu.paint(

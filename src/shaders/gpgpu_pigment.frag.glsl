@@ -125,7 +125,9 @@ void main() {
   float dryProgress = smoothstep(0.625, 1.0, dryTimer);
 
   // ── BAKED LAYER LOCK ──────────────────────────────────────────────────────
-  bool fullyDried   = (dryProgress >= 0.98);
+  // Lower threshold: lock at 0.82 instead of 0.98 so paint bakes earlier,
+  // preventing advection from sweeping colour away before it is fully locked.
+  bool fullyDried   = (dryProgress >= 0.82);
   bool neverPainted = (water < 0.004 && dryTimer < 0.001);
   if ((fullyDried || neverPainted) && u_painting < 0.5) {
     gl_FragColor = prev;
@@ -133,15 +135,21 @@ void main() {
   }
 
   // ── A. Semi-Lagrangian advection — baked-layer protection ────────────────
-  vec2 backPos = clamp(uv - vel * dt, tx, 1.0 - tx);
+  // When not actively painting, pigment behaves like thick watercolour that
+  // resists being swept by residual water flow.  Scale velocity back to 25%
+  // so the paint no longer "drains" outward and leaves a white centre.
+  float velScale = (u_painting > 0.5) ? 1.0 : 0.25;
+  vec2 backPos = clamp(uv - vel * dt * velScale, tx, 1.0 - tx);
 
   vec4  backFluid    = texture2D(tVelocity, backPos);
   float backDryTimer = backFluid.a;
   float backDryProg  = smoothstep(0.625, 1.0, backDryTimer);
 
   vec4 advected;
-  if (backDryProg >= 0.90) {
-    // Source pixel locked — do not smear baked pigment
+  // Also protect the CURRENT pixel: if it has little water, advection cannot
+  // drain paint from it.  Raised threshold 0.015 → 0.05 to catch more cases.
+  if (water < 0.05 || backDryProg >= 0.90) {
+    // Near-dry current pixel OR locked source — preserve paint exactly
     advected = prev;
   } else {
     advected = mix(texture2D(tPigment, backPos), prev, backDryProg * 0.85);
@@ -152,10 +160,11 @@ void main() {
 
   // ── B. Wet-on-wet diffusion (Laplacian + capillary flow) ─────────────────
   // Diffusion gated by (1 - dryProgress): fully dry = zero diffusion.
-  // Tint-style diffusion: strong wet-on-wet bleeding.
-  // Quadratic + linear water dependency creates natural flow:
-  //   lots of water → fast spreading, little water → pigment stays put.
-  float D = (water * water * 0.048 + water * 0.008) * u_backrunStrength;
+  // Halved constants vs original so paint does not spread thin enough to
+  // expose the white paper beneath the stroke centre.
+  // When not painting, halve again — only the active brush gets full spread.
+  float diffMul = (u_painting > 0.5) ? 1.0 : 0.50;
+  float D = (water * water * 0.022 + water * 0.004) * u_backrunStrength * diffMul;
   D *= (1.0 - dryProgress);
 
   // Burst: new stroke landing on existing wet paint → turbulent bleed
@@ -268,8 +277,9 @@ void main() {
       float angle = gnoise(uv*18.0 + u_time*0.45) * 6.2832;
       vec2  bv    = vec2(cos(angle), sin(angle)) * tx * 1.0 * bloomZone;
       vec4  bs    = texture2D(tPigment, uv - bv);
-      newRGB = mix(newRGB, bs.rgb, bloomZone * 0.050 * u_backrunStrength * bloomScale);
-      newA   = mix(newA,   bs.a,   bloomZone * 0.042 * u_backrunStrength * bloomScale);
+      // Halved bloom mix — prevents the cauliflower hollow-centre look
+      newRGB = mix(newRGB, bs.rgb, bloomZone * 0.025 * u_backrunStrength * bloomScale);
+      newA   = mix(newA,   bs.a,   bloomZone * 0.021 * u_backrunStrength * bloomScale);
     }
   }
 
@@ -395,17 +405,31 @@ void main() {
   }
 
   // ── H. Pigment retention / colour lock ───────────────────────────────────
+  // Two-tier lock:
+  //   lock > 0.90 (water < ~0.19): HARD freeze — paint is physically immobile,
+  //     density and colour are clamped to never decrease below prev values.
+  //   otherwise: soft retention floor that decays slowly (0.992/frame).
   if (u_painting < 0.5) {
-    float lock   = 1.0 - smoothstep(0.05, 0.75, water);
-    float retain = 0.94 + lock * 0.04 * u_retentionStrength;
-    newA = max(newA, prev.a * retain);
+    float lock = 1.0 - smoothstep(0.05, 0.75, water);
 
-    float safePrevA = max(prev.a, 0.001);
-    float safeNewA  = max(newA, 0.001);
-    vec3  prevHue   = prev.rgb / safePrevA;
-    vec3  curHue    = newRGB / safeNewA;
-    vec3  lockedHue = mix(curHue, prevHue, lock * 0.35 * u_retentionStrength);
-    newRGB = clamp(lockedHue, vec3(0.0), vec3(1.0)) * newA;
+    if (lock > 0.90) {
+      // Hard freeze: dry paint cannot lose density or shift colour
+      if (prev.a > newA) {
+        newA   = prev.a;
+        newRGB = prev.rgb;
+      }
+    } else {
+      // Soft retention: gentle floor while still wet — allows slow wet flow
+      float retain = 0.992 + lock * 0.008 * u_retentionStrength;
+      newA = max(newA, prev.a * retain);
+
+      float safePrevA = max(prev.a, 0.001);
+      float safeNewA  = max(newA, 0.001);
+      vec3  prevHue   = prev.rgb / safePrevA;
+      vec3  curHue    = newRGB / safeNewA;
+      vec3  lockedHue = mix(curHue, prevHue, lock * 0.35 * u_retentionStrength);
+      newRGB = clamp(lockedHue, vec3(0.0), vec3(1.0)) * newA;
+    }
   }
 
   newA = clamp(newA, 0.0, 0.88);
