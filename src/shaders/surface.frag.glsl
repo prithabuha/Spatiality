@@ -211,7 +211,7 @@ void main() {
 
   // K/S from paint hue — boosted absorption for saturated pigment
   vec3 ks = _kmReflToKS(vivid);
-  ks *= 3.0;  // higher absorption → deeper, richer pigment colour
+  ks *= 1.6;  // moderate absorption — vivid colour without darkening
 
   // Infinite-layer reflectance R∞ and extinction coefficient b
   vec3 Rinf = _kmKSToRefl(ks);
@@ -229,7 +229,7 @@ void main() {
   kmResult = mix(kmResult, canvas, grainBreakup);
 
   // ── Soft lighting on paint — grain modulates paint brightness ────────────
-  float surfaceShade = 0.84 + combinedGrain * 0.26;  // wider range → grain pops through paint
+  float surfaceShade = 0.92 + combinedGrain * 0.10;  // gentle grain modulation, no darkening
   float lightOnPaint = NdotL * 0.15 + 0.92;
   kmResult *= surfaceShade * lightOnPaint;
 
@@ -237,20 +237,7 @@ void main() {
   float wetDilute = mix(1.0, 0.97, wetness * density);  // less wet dilution → colour holds
   kmResult *= wetDilute;
 
-  // ── Edge darkening — pigment pools at drying stroke boundary ────────────
-  // Real watercolour: dissolved pigment migrates to the evaporation front,
-  // depositing a darker "tide mark" ring just inside the stroke edge.
-  // Peak darkening at density 0.06–0.20 (the transition ring).
-  float edgeRing   = smoothstep(0.005, 0.06, density)
-                   * (1.0 - smoothstep(0.06, 0.30, density));
-  kmResult *= 1.0 - edgeRing * 0.50;
-
-  // ── Multiply blend — paint absorbs light like real pigment on paper ───────
-  // ctx.globalCompositeOperation = 'multiply' equivalent:
-  // paint colour × paper colour → paint sinks into grain, deeper in valleys.
-  vec3  multiplyColor = kmResult * canvas;
-  float multiplyWeight = smoothstep(0.08, 0.55, density) * 0.30;
-  kmResult = mix(kmResult, multiplyColor, multiplyWeight);
+  // (edge darkening and multiply blend removed — were causing dull dark colours)
 
   // ── Water film shimmer — faint cool reflection on wet areas ───────────────
   vec3 waterTint = vec3(0.008, 0.013, 0.020) * wetness;
