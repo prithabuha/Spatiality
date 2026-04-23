@@ -135,9 +135,9 @@ void main() {
   }
 
   // ── A. Semi-Lagrangian advection — baked-layer protection ────────────────
-  // When not actively painting, pigment behaves like thick watercolour that
-  // resists being swept by residual water flow.  Scale velocity back to 25%
-  // so the paint no longer "drains" outward and leaves a white centre.
+  // Pigment behaves like thick watercolour embedded in paper fibres: it does
+  // not flow freely with the water film.  velScale is capped at 0.25 at all
+  // times (during and after painting) so pigment stays where it was deposited.
   //
   // dryVelFade: as dryProgress rises, capillary/residual flow is ramped from
   // 25 % → ~2 % so it can no longer redistribute pigment away from its painted
@@ -145,7 +145,15 @@ void main() {
   // velocity shader depletes peak-pixel density to ~69 % by the time dryTimer
   // reaches 1.0 — the root cause of faded baked colours.
   float dryVelFade = 1.0 - smoothstep(0.15, 0.65, dryProgress) * 0.92;
-  float velScale = (u_painting > 0.5) ? 1.0 : 0.25 * dryVelFade;
+
+  // Hollow-stroke fix: during painting velScale was 1.0, which let the
+  // hydrostatic outward pressure (g_hydro=2.0) sweep pigment from stroke
+  // centres to edges.  Semi-Lagrangian advection then traced edge pixels
+  // back to the centre (correct) but centre pixels back to blank paper
+  // (wrong) — leaving a white void.  Clamping to 0.25 during painting
+  // keeps pigment where the brush deposited it; wet-on-wet blending
+  // (Sections B/E) and brush stamps (Section F) still handle spreading.
+  float velScale = 0.25 * dryVelFade;   // same cap whether painting or not
   vec2 backPos = clamp(uv - vel * dt * velScale, tx, 1.0 - tx);
 
   vec4  backFluid    = texture2D(tVelocity, backPos);
@@ -160,6 +168,14 @@ void main() {
     advected = prev;
   } else {
     advected = mix(texture2D(tPigment, backPos), prev, backDryProg * 0.85);
+  }
+
+  // Secondary hollow-stroke guard: even at 0.25 velScale, if there is
+  // established dense paint at this pixel and advection would reduce it by
+  // more than 10 %, clamp back toward prev.  Deposition (Section F) handles
+  // any new pigment; we must not let residual flow erode it.
+  if (u_painting > 0.5 && prev.a > 0.15 && advected.a < prev.a * 0.90) {
+    advected = mix(advected, prev, 0.85);
   }
 
   float newA   = advected.a;
