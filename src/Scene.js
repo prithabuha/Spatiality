@@ -42,8 +42,8 @@ export class Scene {
 
     // ── Scene ────────────────────────────────────────────────────────────────
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xffffff);  // pure white
-    this.scene.fog = new THREE.FogExp2(0xffffff, 0.004);  // matching white fog
+    this.scene.background = new THREE.Color(0xfbfffa);  // soft mint white
+    this.scene.fog = new THREE.FogExp2(0xfbfffa, 0.004);  // matching fog
 
     // ── Room lighting — bright gallery day ──────────────────────────────────
     // Sky: warm daylight white.  Ground: soft warm bounce from warm floors.
