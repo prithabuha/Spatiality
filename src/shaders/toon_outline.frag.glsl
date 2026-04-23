@@ -1,57 +1,73 @@
 /**
- * Toon Outline — crisp 1 px line-drawing borders.
+ * Toon Outline — depth-based Sobel edge detection.
  *
- * Post-processing Sobel edge-detection pass (no wobble / no animation).
- * Runs after GammaCorrection so luminance thresholds match perceived brightness.
+ * Key design decision: edge detection runs on the LINEAR EYE-SPACE DEPTH
+ * buffer, NOT on luminance.
  *
- * Edges detected:
- *   • Room geometry (wall–floor, wall–ceiling, wall–window junctions)
- *   • Paint blob boundaries against white paper
- *   • Object silhouettes (colour buckets, window frames, trim)
+ * Why depth instead of colour/luminance?
+ *   • Paint strokes live on flat geometry surfaces → zero depth discontinuity
+ *     → the Sobel gradient is ~0 → NO outline drawn on paint.
+ *   • Room corners, window frames, sills, trim → sharp depth steps (metres) →
+ *     Sobel gradient large → crisp ink border drawn.
+ *   • Water-colour wetness, pigment spreads, dry rings — completely unaffected.
  *
- * Tuning for 1 px precision:
- *   smoothstep range = 0.04  →  very narrow transition band ≈ 1 screen pixel.
- *   lineColor near-black (0.06, 0.05, 0.04) — ink on cold-press paper look.
- *   mix at 0.92  →  lines almost opaque, paper colour barely bleeds through.
+ * Normalization:
+ *   Linearised depth is in world units (≈ metres). Room corners produce depth
+ *   gradients of 5-15 m; flat wall pixels produce < 0.05 m.
+ *   Dividing by 8.0 maps a 5 m step to edge ≈ 0.625 (above threshold) and a
+ *   0.05 m flat-wall variation to edge ≈ 0.006 (far below threshold).
+ *
+ * Border tuning (thinner than luminance version):
+ *   smoothstep(0.07, 0.11) → transition ≈ 1-2 px at typical view distances.
+ *   mix at 0.78 → ink almost opaque, tiny hint of base colour bleeds through.
+ *   inkColor (0.06, 0.05, 0.04) — fine-liner on cold-press watercolour paper.
  */
 
 precision highp float;
 
-uniform sampler2D tDiffuse;
+uniform sampler2D tDiffuse;     // gamma-corrected scene colour (from composer chain)
+uniform sampler2D tDepth;       // raw depth [0,1] from RenderPass (renderTarget1)
 uniform vec2      u_resolution;
+uniform float     u_near;
+uniform float     u_far;
 
 varying vec2 vUv;
+
+// Convert non-linear NDC depth [0,1] → linear eye-space depth (world units).
+float linearDepth(float raw) {
+  float z = raw * 2.0 - 1.0;
+  return (2.0 * u_near * u_far) / (u_far + u_near - z * (u_far - u_near));
+}
 
 void main() {
   vec2 tx = 1.0 / u_resolution;
 
-  // ── Sobel 3×3 kernel on luminance ────────────────────────────────────────
-  // Each sample is 1 texel away — ensures the kernel maps to exactly 1 px.
-  const vec3 LUM = vec3(0.299, 0.587, 0.114);
-
-  float tl = dot(texture2D(tDiffuse, vUv + vec2(-tx.x,  tx.y)).rgb, LUM);
-  float tc = dot(texture2D(tDiffuse, vUv + vec2( 0.0,   tx.y)).rgb, LUM);
-  float tr = dot(texture2D(tDiffuse, vUv + vec2( tx.x,  tx.y)).rgb, LUM);
-  float ml = dot(texture2D(tDiffuse, vUv + vec2(-tx.x,  0.0 )).rgb, LUM);
-  float mr = dot(texture2D(tDiffuse, vUv + vec2( tx.x,  0.0 )).rgb, LUM);
-  float bl = dot(texture2D(tDiffuse, vUv + vec2(-tx.x, -tx.y)).rgb, LUM);
-  float bc = dot(texture2D(tDiffuse, vUv + vec2( 0.0,  -tx.y)).rgb, LUM);
-  float br = dot(texture2D(tDiffuse, vUv + vec2( tx.x, -tx.y)).rgb, LUM);
+  // ── Sobel 3×3 kernel on linearised depth ─────────────────────────────────
+  float tl = linearDepth(texture2D(tDepth, vUv + vec2(-tx.x,  tx.y)).r);
+  float tc = linearDepth(texture2D(tDepth, vUv + vec2( 0.0,   tx.y)).r);
+  float tr = linearDepth(texture2D(tDepth, vUv + vec2( tx.x,  tx.y)).r);
+  float ml = linearDepth(texture2D(tDepth, vUv + vec2(-tx.x,  0.0 )).r);
+  float mr = linearDepth(texture2D(tDepth, vUv + vec2( tx.x,  0.0 )).r);
+  float bl = linearDepth(texture2D(tDepth, vUv + vec2(-tx.x, -tx.y)).r);
+  float bc = linearDepth(texture2D(tDepth, vUv + vec2( 0.0,  -tx.y)).r);
+  float br = linearDepth(texture2D(tDepth, vUv + vec2( tx.x, -tx.y)).r);
 
   float gx = -tl - 2.0*ml - bl + tr + 2.0*mr + br;
   float gy = -tl - 2.0*tc - tr + bl + 2.0*bc + br;
   float edge = sqrt(gx*gx + gy*gy);
 
-  // ── Sharp 1 px threshold ──────────────────────────────────────────────────
-  // Narrow smoothstep band (0.10 → 0.14) → transition span ≈ 1–2 px.
-  // Values below 0.10 produce no line; above 0.14 = fully inked.
-  float outline = smoothstep(0.10, 0.14, edge);
+  // Normalise: 5-15 m room corners map to 0.6-1.9; flat wall ~0.006.
+  edge /= 8.0;
 
-  // ── Ink colour — near-black, like a fine-liner on watercolour paper ───────
+  // ── Thin 1 px threshold ───────────────────────────────────────────────────
+  // Narrower band than colour-Sobel version → crisper, lighter-weight lines.
+  float outline = smoothstep(0.07, 0.11, edge);
+
+  // ── Ink colour — fine-liner black on watercolour paper ────────────────────
   vec3 inkColor = vec3(0.06, 0.05, 0.04);
 
   vec4 base   = texture2D(tDiffuse, vUv);
-  vec3 result = mix(base.rgb, inkColor, outline * 0.92);
+  vec3 result = mix(base.rgb, inkColor, outline * 0.78);
 
   gl_FragColor = vec4(result, base.a);
 }

@@ -42,8 +42,8 @@ export class Scene {
 
     // ── Scene ────────────────────────────────────────────────────────────────
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xfefcf8);  // warm daylit white
-    this.scene.fog = new THREE.FogExp2(0xfefcf8, 0.004);  // lighter fog
+    this.scene.background = new THREE.Color(0xffffff);  // pure white
+    this.scene.fog = new THREE.FogExp2(0xffffff, 0.004);  // matching white fog
 
     // ── Room lighting — bright gallery day ──────────────────────────────────
     // Sky: warm daylight white.  Ground: soft warm bounce from warm floors.
@@ -201,20 +201,20 @@ export class Scene {
     const MULL    = 0.06;  // mullion thickness
 
     const glassMat = new THREE.MeshStandardMaterial({
-      color:             new THREE.Color(0xbbe8ff),
-      emissive:          new THREE.Color(0xfff0b0),
-      emissiveIntensity: 2.2,
+      color:             new THREE.Color(0xffffff),   // white / clear
+      emissive:          new THREE.Color(0xffffff),   // pure white daylight
+      emissiveIntensity: 1.8,
       transparent: true,
-      opacity:     0.68,
-      roughness:   0.04,
-      metalness:   0.10,
+      opacity:     0.55,
+      roughness:   0.02,
+      metalness:   0.05,
       side: THREE.FrontSide,
     });
     const frameMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(0xf2ede7), roughness: 0.80, metalness: 0.0,
+      color: new THREE.Color(0xffffff), roughness: 0.70, metalness: 0.0,
     });
     const mullMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(0xe6e1da), roughness: 0.75, metalness: 0.0,
+      color: new THREE.Color(0xffffff), roughness: 0.70, metalness: 0.0,
     });
 
     const configs = [
@@ -466,15 +466,27 @@ export class Scene {
   render() { this.composer.render(); }
 
   _setupComposer() {
+    const w = window.innerWidth, h = window.innerHeight;
     this.composer = new EffectComposer(this.renderer);
+
+    // ── Attach a depth texture to the first render target so RenderPass
+    //    writes real per-pixel depth we can read in the ToonOutline shader.
+    //    Paint strokes lie on flat geometry → zero depth gradient → no edge.
+    //    Room corners / window frames have sharp depth steps → outline. ────────
+    this.composer.renderTarget1.depthTexture = new THREE.DepthTexture(w, h);
+    this.composer.renderTarget1.depthTexture.type = THREE.UnsignedShortType;
+
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.composer.addPass(new ShaderPass(GammaCorrectionShader));
 
-    // ── Toon outline — 1 px Sobel edge detection post-pass ───────────────────
+    // ── Toon outline — depth-based 1 px Sobel ────────────────────────────────
     const ToonShader = {
       uniforms: {
         tDiffuse:     { value: null },
-        u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+        tDepth:       { value: this.composer.renderTarget1.depthTexture },
+        u_resolution: { value: new THREE.Vector2(w, h) },
+        u_near:       { value: this.camera.near },
+        u_far:        { value: this.camera.far },
       },
       vertexShader: /* glsl */`
         varying vec2 vUv;
