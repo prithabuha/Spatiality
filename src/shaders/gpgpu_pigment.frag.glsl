@@ -138,7 +138,14 @@ void main() {
   // When not actively painting, pigment behaves like thick watercolour that
   // resists being swept by residual water flow.  Scale velocity back to 25%
   // so the paint no longer "drains" outward and leaves a white centre.
-  float velScale = (u_painting > 0.5) ? 1.0 : 0.25;
+  //
+  // dryVelFade: as dryProgress rises, capillary/residual flow is ramped from
+  // 25 % → ~2 % so it can no longer redistribute pigment away from its painted
+  // position before baking.  Without this, the 0.60 capillary kappa in the
+  // velocity shader depletes peak-pixel density to ~69 % by the time dryTimer
+  // reaches 1.0 — the root cause of faded baked colours.
+  float dryVelFade = 1.0 - smoothstep(0.15, 0.65, dryProgress) * 0.92;
+  float velScale = (u_painting > 0.5) ? 1.0 : 0.25 * dryVelFade;
   vec2 backPos = clamp(uv - vel * dt * velScale, tx, 1.0 - tx);
 
   vec4  backFluid    = texture2D(tVelocity, backPos);
@@ -419,8 +426,12 @@ void main() {
         newRGB = prev.rgb;
       }
     } else {
-      // Soft retention: gentle floor while still wet — allows slow wet flow
-      float retain = 0.992 + lock * 0.008 * u_retentionStrength;
+      // Soft retention: gentle floor while still wet — allows slow wet flow.
+      // Boost toward 1.0 as dryProgress rises so density cannot drain during
+      // the baking transition — baked colours stay as bold as when painted.
+      float retainWet = 0.992 + lock * 0.008 * u_retentionStrength;
+      float retain    = mix(retainWet, 1.0, dryProgress * 0.92);
+      retain          = min(retain, 1.0);
       newA = max(newA, prev.a * retain);
 
       float safePrevA = max(prev.a, 0.001);
