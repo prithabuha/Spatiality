@@ -41,13 +41,14 @@ export class Scene {
 
     // ── Scene ────────────────────────────────────────────────────────────────
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xf5f5f5);  // pure paper white
-    this.scene.fog = new THREE.FogExp2(0xf5f5f5, 0.007);
+    this.scene.background = new THREE.Color(0xfefcf8);  // warm daylit white
+    this.scene.fog = new THREE.FogExp2(0xfefcf8, 0.004);  // lighter fog
 
-    // ── Studio lighting: cool neutral for projection accuracy ───────────────
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0xe8e8f0, 2.8));
+    // ── Room lighting — bright gallery day ──────────────────────────────────
+    // Sky: warm daylight white.  Ground: soft warm bounce from warm floors.
+    this.scene.add(new THREE.HemisphereLight(0xfff8f0, 0xd8c8a0, 4.2));
 
-    const key = new THREE.DirectionalLight(0xffffff, 1.2);
+    const key = new THREE.DirectionalLight(0xfffaf0, 2.0);
     key.position.set(0, 14, 4);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
@@ -162,6 +163,8 @@ export class Scene {
 
     this._addCeilingGrid(W, D, H);
     this._addWindowPanels(W, H, D);
+    this._addCeilingLights(W, H, D);
+    this._addTrim(W, H, D);
   }
 
   _addCeilingGrid(W, D, H) {
@@ -179,25 +182,147 @@ export class Scene {
   }
 
   _addWindowPanels(W, H, D) {
-    const windowMat = new THREE.MeshStandardMaterial({
-      color: 0xffeedd,
-      emissive: new THREE.Color(0xffd8a0),
-      emissiveIntensity: 0.5,
-      roughness: 0.2, metalness: 0,
+    // ── 3-D window with frame reveal + sill ─────────────────────────────────
+    // Each window is a THREE.Group containing:
+    //   • Glass pane  — transparent emissive (bright daylight)
+    //   • Mullions    — 1 horizontal + 2 vertical crossbars (6-pane grid)
+    //   • Frame top + two sides — BoxGeometry panels that protrude FRAME_D into
+    //     the room (local +Z in group space), simulating wall thickness / reveal.
+    //   • Sill        — wider, deeper bottom ledge for realism.
+    //
+    // Group rotation convention:
+    //   ry = +π/2  → left  wall: local +Z maps to world +X (into room) ✓
+    //   ry = -π/2  → right wall: local +Z maps to world −X (into room) ✓
+    // So all geometry offsets in local +Z work for both walls unchanged.
+
+    const WIN_W  = 3.8;    // glass width
+    const WIN_H  = 5.0;    // glass height
+    const FRAME_W = 0.14;  // frame border width
+    const FRAME_D = 0.52;  // reveal depth  ← wall thickness visual
+    const SILL_H  = 0.15;  // sill height
+    const SILL_D  = 0.75;  // sill depth (sticks further into room than frame)
+    const MULL    = 0.06;  // mullion thickness
+
+    const glassMat = new THREE.MeshStandardMaterial({
+      color:             new THREE.Color(0xbbe8ff),
+      emissive:          new THREE.Color(0xfff0b0),
+      emissiveIntensity: 2.2,
+      transparent: true,
+      opacity:     0.68,
+      roughness:   0.04,
+      metalness:   0.10,
+      side: THREE.FrontSide,
     });
-    [
-      { x: -W/2 + 0.01, z: -4, ry:  Math.PI/2 },
-      { x: -W/2 + 0.01, z:  4, ry:  Math.PI/2 },
-      { x:  W/2 - 0.01, z: -4, ry: -Math.PI/2 },
-      { x:  W/2 - 0.01, z:  4, ry: -Math.PI/2 },
-    ].forEach(({ x, z, ry }) => {
-      const win = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 4.5), windowMat);
-      win.position.set(x, H/2 + 0.5, z);
-      win.rotation.y = ry;
-      this.scene.add(win);
-      const wLight = new THREE.PointLight(0xffe8c0, 0.8, 18);
-      wLight.position.set(x * 0.85, H/2 + 0.5, z);
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(0xf2ede7), roughness: 0.80, metalness: 0.0,
+    });
+    const mullMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(0xe6e1da), roughness: 0.75, metalness: 0.0,
+    });
+
+    const configs = [
+      { cx: -W/2, cz: -4, ry:  Math.PI / 2 },
+      { cx: -W/2, cz:  4, ry:  Math.PI / 2 },
+      { cx:  W/2, cz: -4, ry: -Math.PI / 2 },
+      { cx:  W/2, cz:  4, ry: -Math.PI / 2 },
+    ];
+
+    configs.forEach(({ cx, cz, ry }) => {
+      const cy = H / 2 + 0.8;
+      const grp = new THREE.Group();
+      grp.position.set(cx, cy, cz);
+      grp.rotation.y = ry;
+      this.scene.add(grp);
+
+      const add = (geo, mat, px = 0, py = 0, pz = 0) => {
+        const m = new THREE.Mesh(geo, mat);
+        m.position.set(px, py, pz);
+        grp.add(m);
+        return m;
+      };
+
+      // Glass (sits on wall surface, faces into room via group rotation)
+      add(new THREE.PlaneGeometry(WIN_W, WIN_H), glassMat, 0, 0, 0.02);
+
+      // Mullions — 1 horizontal + 2 vertical (creates 6 panes: 3×2)
+      add(new THREE.BoxGeometry(WIN_W,  MULL, MULL), mullMat,  0,        0, 0.04);
+      add(new THREE.BoxGeometry(MULL, WIN_H,  MULL), mullMat, -WIN_W/3,  0, 0.04);
+      add(new THREE.BoxGeometry(MULL, WIN_H,  MULL), mullMat,  WIN_W/3,  0, 0.04);
+
+      // Frame reveal — top
+      add(new THREE.BoxGeometry(WIN_W + 2*FRAME_W, FRAME_W, FRAME_D),
+          frameMat, 0,  WIN_H/2 + FRAME_W/2, FRAME_D/2);
+      // Frame reveal — left side
+      add(new THREE.BoxGeometry(FRAME_W, WIN_H + FRAME_W, FRAME_D),
+          frameMat, -WIN_W/2 - FRAME_W/2, 0, FRAME_D/2);
+      // Frame reveal — right side
+      add(new THREE.BoxGeometry(FRAME_W, WIN_H + FRAME_W, FRAME_D),
+          frameMat,  WIN_W/2 + FRAME_W/2, 0, FRAME_D/2);
+      // Sill — bottom ledge, wider + deeper than the frame sides
+      add(new THREE.BoxGeometry(WIN_W + 2*FRAME_W + 0.28, SILL_H, SILL_D),
+          frameMat, 0, -WIN_H/2 - SILL_H/2, SILL_D/2);
+
+      // ── Window sunlight (outside the room, in local −Z = exterior) ────────
+      const extOff = new THREE.Vector3(0, 1.0, -2.5).applyEuler(grp.rotation);
+      const wLight = new THREE.PointLight(0xfffae8, 4.0, 35);
+      wLight.position.set(cx + extOff.x, cy + extOff.y, cz + extOff.z);
       this.scene.add(wLight);
+
+      // ── Interior bloom — warm light spilling into the room ────────────────
+      const intOff = new THREE.Vector3(0, 0, 2.5).applyEuler(grp.rotation);
+      const iLight = new THREE.PointLight(0xffe4a0, 1.6, 18);
+      iLight.position.set(cx + intOff.x, cy + intOff.y, cz + intOff.z);
+      this.scene.add(iLight);
+    });
+  }
+
+  // ── Ceiling downlights — gallery-style track fixtures ────────────────────
+  _addCeilingLights(W, H, D) {
+    const intensity = 2.8;
+    const range     = 14;
+    const color     = 0xfff8f0;  // warm white
+    const positions = [
+      [-W * 0.28, H - 0.5,  -D * 0.22],
+      [ W * 0.28, H - 0.5,  -D * 0.22],
+      [ 0,        H - 0.5,   0       ],
+      [-W * 0.28, H - 0.5,   D * 0.22],
+      [ W * 0.28, H - 0.5,   D * 0.22],
+    ];
+    positions.forEach(([x, y, z]) => {
+      const cl = new THREE.PointLight(color, intensity, range);
+      cl.position.set(x, y, z);
+      this.scene.add(cl);
+    });
+  }
+
+  // ── Baseboard + crown trim — adds architectural scale/realism ─────────────
+  _addTrim(W, H, D) {
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(0xece7e0), roughness: 0.75, metalness: 0,
+    });
+    const bd = 0.04;  // protrusion depth from wall
+    const bh = 0.22;  // baseboard height
+    const ch = 0.14;  // crown height
+
+    // Baseboard — runs along base of all four walls
+    const baseboards = [
+      { s:[W,    bh, bd    ], p:[0,        bh/2,     -D/2 + bd/2] },  // front
+      { s:[W,    bh, bd    ], p:[0,        bh/2,      D/2 - bd/2] },  // back
+      { s:[bd,   bh, D     ], p:[-W/2+bd/2,bh/2,     0          ] },  // left
+      { s:[bd,   bh, D     ], p:[ W/2-bd/2,bh/2,     0          ] },  // right
+    ];
+    // Crown moulding — runs along top of all four walls
+    const crowns = [
+      { s:[W,    ch, bd    ], p:[0,        H - ch/2, -D/2 + bd/2] },
+      { s:[W,    ch, bd    ], p:[0,        H - ch/2,  D/2 - bd/2] },
+      { s:[bd,   ch, D     ], p:[-W/2+bd/2,H - ch/2,  0         ] },
+      { s:[bd,   ch, D     ], p:[ W/2-bd/2,H - ch/2,  0         ] },
+    ];
+
+    [...baseboards, ...crowns].forEach(({ s, p }) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(...s), mat);
+      m.position.set(...p);
+      this.scene.add(m);
     });
   }
 

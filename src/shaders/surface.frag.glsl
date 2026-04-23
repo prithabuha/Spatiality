@@ -111,7 +111,7 @@ void main() {
   // Smooth diffuse wrap: light wraps around surface for watercolour softness.
   // No harsh shadows, no stepped banding — just gentle luminance variation.
   float NdotL = dot(N, L);
-  float diffuse = clamp(NdotL * 0.40 + 0.60, 0.0, 1.0);  // wide wrap
+  float diffuse = clamp(NdotL * 0.35 + 0.68, 0.0, 1.0);  // wide wrap — brighter minimum
 
   // ── Isotropic paper grain — rotated Perlin FBM, no directional axis ────────
   // Each octave rotated by a different angle → no grid, no straight lines.
@@ -230,7 +230,7 @@ void main() {
 
   // ── Soft lighting on paint — grain modulates paint brightness ────────────
   float surfaceShade = 0.92 + combinedGrain * 0.10;  // gentle grain modulation, no darkening
-  float lightOnPaint = NdotL * 0.15 + 0.92;
+  float lightOnPaint = NdotL * 0.12 + 0.95;
   kmResult *= surfaceShade * lightOnPaint;
 
   // ── Wet dilution — water dilutes pigment concentration ────────────────────
