@@ -114,26 +114,30 @@ export class Scene {
     });
 
     return {
-      front: rectAt(0, 0),
-      back:  rectAt(1, 0),
-      left:  rectAt(2, 0),
-      right: rectAt(0, 1),
-      floor: rectAt(1, 1),
+      front:   rectAt(0, 0),
+      back:    rectAt(1, 0),
+      left:    rectAt(2, 0),
+      right:   rectAt(0, 1),
+      floor:   rectAt(1, 1),
+      ceiling: rectAt(2, 1),   // ← was empty slot; now paintable canvas
     };
   }
 
-  // ── Room — all 5 surfaces paintable ─────────────────────────────────────────
+  // ── Room — all 6 surfaces paintable (walls × 4, floor, ceiling) ─────────────
   _buildRoom() {
     const W = 28, H = 12, D = 30;
 
     // paperTexScale: how many times the 1024px texture repeats on each surface
     // Larger surface → more repeats so fibres stay a physical size (~2cm on paper)
     const panels = [
-      { key:'front', p:[0, H/2, -D/2], r:[0,  0,          0], w:W, h:H, c:'#f8f8f8', pts: new THREE.Vector2(W * 0.45, H * 0.45) },
-      { key:'back',  p:[0, H/2,  D/2], r:[0,  Math.PI,    0], w:W, h:H, c:'#f7f7f7', pts: new THREE.Vector2(W * 0.45, H * 0.45) },
-      { key:'left',  p:[-W/2,H/2, 0],  r:[0,  Math.PI/2,  0], w:D, h:H, c:'#f7f7f7', pts: new THREE.Vector2(D * 0.45, H * 0.45) },
-      { key:'right', p:[ W/2,H/2, 0],  r:[0, -Math.PI/2,  0], w:D, h:H, c:'#f7f7f7', pts: new THREE.Vector2(D * 0.45, H * 0.45) },
-      { key:'floor', p:[0, 0, 0],      r:[-Math.PI/2, 0,  0], w:W, h:D, c:'#f5f5f5', pts: new THREE.Vector2(W * 0.45, D * 0.45) },
+      { key:'front',   p:[0, H/2, -D/2], r:[0,           0, 0], w:W, h:H, c:'#f8f8f8', pts: new THREE.Vector2(W * 0.45, H * 0.45) },
+      { key:'back',    p:[0, H/2,  D/2], r:[0,    Math.PI, 0], w:W, h:H, c:'#f7f7f7', pts: new THREE.Vector2(W * 0.45, H * 0.45) },
+      { key:'left',    p:[-W/2,H/2, 0],  r:[0,  Math.PI/2, 0], w:D, h:H, c:'#f7f7f7', pts: new THREE.Vector2(D * 0.45, H * 0.45) },
+      { key:'right',   p:[ W/2,H/2, 0],  r:[0, -Math.PI/2, 0], w:D, h:H, c:'#f7f7f7', pts: new THREE.Vector2(D * 0.45, H * 0.45) },
+      { key:'floor',   p:[0, 0,   0],    r:[-Math.PI/2, 0, 0], w:W, h:D, c:'#f5f5f5', pts: new THREE.Vector2(W * 0.45, D * 0.45) },
+      // Ceiling — same atlas slot (2,1), normal faces DOWN so it is visible
+      // from inside the room and paintable via hand gestures pointing upward.
+      { key:'ceiling', p:[0, H,   0],    r:[ Math.PI/2, 0, 0], w:W, h:D, c:'#f8f8f8', pts: new THREE.Vector2(W * 0.45, D * 0.45) },
     ];
 
     panels.forEach(({ key, p, r, w, h, c, pts }) => {
@@ -152,15 +156,7 @@ export class Scene {
       this._paintMeshes.push(mesh);
     });
 
-    // Ceiling — pure white
-    const ceil = new THREE.Mesh(
-      new THREE.PlaneGeometry(W, D),
-      new THREE.MeshStandardMaterial({ color: 0xf8f8f8, roughness: 1, metalness: 0 })
-    );
-    ceil.position.y = H;
-    ceil.rotation.x = Math.PI / 2;
-    this.scene.add(ceil);
-
+    // Ceiling is now the paintable panel added above — no separate mesh needed.
     this._addCeilingGrid(W, D, H);
     this._addWindowPanels(W, H, D);
     this._addCeilingLights(W, H, D);
