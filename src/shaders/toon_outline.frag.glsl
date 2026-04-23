@@ -1,55 +1,57 @@
 /**
- * Toon Outline — Sobel edge detection with hand-drawn wobble.
+ * Toon Outline — crisp 1 px line-drawing borders.
  *
- * Post-processing pass applied after the main scene render.
- * Detects edges via Sobel 3×3 on luminance, with organic
- * UV perturbation that makes outlines feel sketched by hand.
- * Warm sepia line colour blends softly over the scene.
+ * Post-processing Sobel edge-detection pass (no wobble / no animation).
+ * Runs after GammaCorrection so luminance thresholds match perceived brightness.
  *
- * Used with Three.js ShaderPass (ShaderMaterial auto-adds precision).
+ * Edges detected:
+ *   • Room geometry (wall–floor, wall–ceiling, wall–window junctions)
+ *   • Paint blob boundaries against white paper
+ *   • Object silhouettes (colour buckets, window frames, trim)
+ *
+ * Tuning for 1 px precision:
+ *   smoothstep range = 0.04  →  very narrow transition band ≈ 1 screen pixel.
+ *   lineColor near-black (0.06, 0.05, 0.04) — ink on cold-press paper look.
+ *   mix at 0.92  →  lines almost opaque, paper colour barely bleeds through.
  */
 
+precision highp float;
+
 uniform sampler2D tDiffuse;
-uniform vec2  u_resolution;
-uniform float u_time;
+uniform vec2      u_resolution;
 
 varying vec2 vUv;
 
 void main() {
-  vec2 texel = 1.0 / u_resolution;
+  vec2 tx = 1.0 / u_resolution;
 
-  // ── Hand-drawn wobble: organic UV perturbation ────────────────────────────
-  float wobX = sin(u_time * 2.1 + vUv.y * 41.0) * 0.0006
-             + sin(u_time * 0.7 + vUv.x * 67.0) * 0.0003;
-  float wobY = cos(u_time * 1.7 + vUv.x * 37.0) * 0.0006
-             + cos(u_time * 1.1 + vUv.y * 53.0) * 0.0003;
-  vec2 wUv = vUv + vec2(wobX, wobY);
+  // ── Sobel 3×3 kernel on luminance ────────────────────────────────────────
+  // Each sample is 1 texel away — ensures the kernel maps to exactly 1 px.
+  const vec3 LUM = vec3(0.299, 0.587, 0.114);
 
-  // ── Sobel 3×3 on luminance ────────────────────────────────────────────────
-  vec3 lumW = vec3(0.299, 0.587, 0.114);
+  float tl = dot(texture2D(tDiffuse, vUv + vec2(-tx.x,  tx.y)).rgb, LUM);
+  float tc = dot(texture2D(tDiffuse, vUv + vec2( 0.0,   tx.y)).rgb, LUM);
+  float tr = dot(texture2D(tDiffuse, vUv + vec2( tx.x,  tx.y)).rgb, LUM);
+  float ml = dot(texture2D(tDiffuse, vUv + vec2(-tx.x,  0.0 )).rgb, LUM);
+  float mr = dot(texture2D(tDiffuse, vUv + vec2( tx.x,  0.0 )).rgb, LUM);
+  float bl = dot(texture2D(tDiffuse, vUv + vec2(-tx.x, -tx.y)).rgb, LUM);
+  float bc = dot(texture2D(tDiffuse, vUv + vec2( 0.0,  -tx.y)).rgb, LUM);
+  float br = dot(texture2D(tDiffuse, vUv + vec2( tx.x, -tx.y)).rgb, LUM);
 
-  float tl = dot(texture2D(tDiffuse, wUv + vec2(-texel.x,  texel.y)).rgb, lumW);
-  float tc = dot(texture2D(tDiffuse, wUv + vec2(     0.0,  texel.y)).rgb, lumW);
-  float tr = dot(texture2D(tDiffuse, wUv + vec2( texel.x,  texel.y)).rgb, lumW);
-  float ml = dot(texture2D(tDiffuse, wUv + vec2(-texel.x,      0.0)).rgb, lumW);
-  float mr = dot(texture2D(tDiffuse, wUv + vec2( texel.x,      0.0)).rgb, lumW);
-  float bl = dot(texture2D(tDiffuse, wUv + vec2(-texel.x, -texel.y)).rgb, lumW);
-  float bc = dot(texture2D(tDiffuse, wUv + vec2(     0.0, -texel.y)).rgb, lumW);
-  float br = dot(texture2D(tDiffuse, wUv + vec2( texel.x, -texel.y)).rgb, lumW);
+  float gx = -tl - 2.0*ml - bl + tr + 2.0*mr + br;
+  float gy = -tl - 2.0*tc - tr + bl + 2.0*bc + br;
+  float edge = sqrt(gx*gx + gy*gy);
 
-  // Sobel horizontal (Gx) and vertical (Gy)
-  float gx = -tl - 2.0 * ml - bl + tr + 2.0 * mr + br;
-  float gy = -tl - 2.0 * tc - tr + bl + 2.0 * bc + br;
-  float edge = sqrt(gx * gx + gy * gy);
+  // ── Sharp 1 px threshold ──────────────────────────────────────────────────
+  // Narrow smoothstep band (0.10 → 0.14) → transition span ≈ 1–2 px.
+  // Values below 0.10 produce no line; above 0.14 = fully inked.
+  float outline = smoothstep(0.10, 0.14, edge);
 
-  // Smooth threshold → hand-drawn feel (not hard binary edges)
-  float outline = smoothstep(0.06, 0.22, edge);
-
-  // Warm sepia outline colour — feels like ink on sketchbook paper
-  vec3 lineColor = vec3(0.35, 0.28, 0.18);
+  // ── Ink colour — near-black, like a fine-liner on watercolour paper ───────
+  vec3 inkColor = vec3(0.06, 0.05, 0.04);
 
   vec4 base   = texture2D(tDiffuse, vUv);
-  vec3 result = mix(base.rgb, lineColor, outline * 0.60);
+  vec3 result = mix(base.rgb, inkColor, outline * 0.92);
 
   gl_FragColor = vec4(result, base.a);
 }

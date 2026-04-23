@@ -14,8 +14,9 @@ import { EffectComposer }        from 'three/examples/jsm/postprocessing/EffectC
 import { RenderPass }            from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass }            from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectionShader.js';
-import surfaceVert   from './shaders/surface.vert.glsl?raw';
-import surfaceFrag   from './shaders/surface.frag.glsl?raw';
+import surfaceVert      from './shaders/surface.vert.glsl?raw';
+import surfaceFrag      from './shaders/surface.frag.glsl?raw';
+import toonOutlineFrag  from './shaders/toon_outline.frag.glsl?raw';
 import { buildPaperTexture }     from './PaperTexture.js';
 
 export class Scene {
@@ -468,7 +469,23 @@ export class Scene {
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.composer.addPass(new ShaderPass(GammaCorrectionShader));
-    // No outline pass — colours merge naturally via K-M absorption (Tint style).
+
+    // ── Toon outline — 1 px Sobel edge detection post-pass ───────────────────
+    const ToonShader = {
+      uniforms: {
+        tDiffuse:     { value: null },
+        u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+      },
+      vertexShader: /* glsl */`
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: toonOutlineFrag,
+    };
+    this._toonPass = new ShaderPass(ToonShader);
+    this.composer.addPass(this._toonPass);
   }
 
   _onResize() {
@@ -478,5 +495,6 @@ export class Scene {
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
     this._screenSize.set(w, h);
+    if (this._toonPass) this._toonPass.uniforms.u_resolution.value.set(w, h);
   }
 }
