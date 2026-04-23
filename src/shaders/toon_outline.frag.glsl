@@ -59,15 +59,16 @@ void main() {
   // Normalise: 5-15 m room corners map to 0.6-1.9; flat wall ~0.006.
   edge /= 8.0;
 
-  // ── Thin 1 px threshold ───────────────────────────────────────────────────
-  // Narrower band than colour-Sobel version → crisper, lighter-weight lines.
-  float outline = smoothstep(0.07, 0.11, edge);
+  // ── Ultra-thin ~0.25 px threshold ────────────────────────────────────────
+  // Extremely narrow smoothstep band (0.005 wide) collapses the transition to
+  // a sub-pixel sliver — visually ≈ 0.25 screen pixels.
+  float outline = smoothstep(0.088, 0.093, edge);
 
   // ── Ink colour — fine-liner black on watercolour paper ────────────────────
   vec3 inkColor = vec3(0.06, 0.05, 0.04);
 
   vec4 base   = texture2D(tDiffuse, vUv);
-  vec3 result = mix(base.rgb, inkColor, outline * 0.78);
+  vec3 result = mix(base.rgb, inkColor, outline * 0.70);
 
   gl_FragColor = vec4(result, base.a);
 }
