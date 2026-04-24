@@ -118,7 +118,7 @@ export class HandTracker {
       if (prompt) prompt.style.display = 'none';
       const chip = document.getElementById('hint-chip');
       if (chip) chip.textContent =
-        'Hold index finger 2 s to start · Wave both hands 3× to clear ✦';
+        'Hold index finger 2 s to paint  ·  Wave both hands 3 times to clear the canvas ✦';
 
       // Face detector loads in background — non-blocking, non-critical
       this._initFaceDetector().catch(e =>
@@ -236,7 +236,7 @@ export class HandTracker {
         await this._startCamera();
         this.ready = true;
         if (chip) chip.textContent =
-          'Hold index finger 2 s to start · Wave both hands 3× to clear ✦';
+          'Hold index finger 2 s to paint  ·  Wave both hands 3 times to clear the canvas ✦';
       } catch (err) {
         console.error('Camera retry failed:', err);
         this._showCameraError(err);
@@ -577,7 +577,7 @@ export class HandTracker {
     // Label
     ctx.fillStyle = 'rgba(100,180,255,0.90)';
     ctx.font      = 'bold 20px system-ui';
-    ctx.fillText('🌊  Wave to clear  —  keep going!', cx, 46);
+    ctx.fillText('🌊  WAVE BOTH HANDS 3 TIMES TO CLEAR THE CANVAS', cx, 46);
 
     // Dots  ● ● ●  filled as swipes are registered
     const dotR = 10, dotGap = 32, dotsY = 76;

@@ -677,7 +677,7 @@ function flashHint(msg) {
   hintChip.textContent = msg;
   clearTimeout(flashHint._t);
   flashHint._t = setTimeout(() => {
-    hintChip.textContent = 'Hold index finger 2 s to start · Wave both hands 3× to clear ✦';
+    hintChip.textContent = 'Hold index finger 2 s to paint  ·  Wave both hands 3 times to clear the canvas ✦';
   }, 1800);
 }
 
