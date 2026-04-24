@@ -383,19 +383,22 @@ export class HandTracker {
   }
 
   // ── 👍 Thumbs-up gesture detection ───────────────────────────────────────
-  // Thumb tip must be above wrist; all four fingers must be curled closed.
+  // Two conditions must both be true:
+  //   1. All four non-thumb fingers are NOT extended  (uses same _extended()
+  //      logic that reliably drove the old open-hand clear)
+  //   2. Thumb tip is above the index MCP knuckle line (lm[5])
+  //      → distinguishes "thumb up" from "thumb folded into fist"
   _isThumbsUp(lm) {
-    const thumbUp     = lm[4].y < lm[2].y && lm[4].y < lm[0].y;
-    const indexCurled = lm[8].y  > lm[6].y;
-    const midCurled   = lm[12].y > lm[10].y;
-    const ringCurled  = lm[16].y > lm[14].y;
-    const pinkyCurled = lm[20].y > lm[18].y;
-    return thumbUp && indexCurled && midCurled && ringCurled && pinkyCurled;
+    const ext = this._extended(lm);
+    // 4 fingers must all be NOT extended (curled / in fist)
+    if (ext.index || ext.middle || ext.ring || ext.pinky) return false;
+    // Thumb tip (lm[4]) must be above index knuckle (lm[5], Y decreases upward)
+    return lm[4].y < lm[5].y;
   }
 
-  // Hold thumbs-up for 5 s → onClear().
-  // Works with one hand OR both — whichever the primary hand is.
-  // Timer decays slowly on drop so brief jitter doesn't reset progress.
+  // Hold thumbs-up for 5 s → onClear().  Works with 1 or 2 hands visible.
+  // Accumulator fills while gesture holds; drops fast when hand changes shape
+  // so accidental overlap with other gestures is cleared quickly.
   _checkThumbsUp(lm, dt) {
     if (this._clearCooldown > 0) return;
 
@@ -409,8 +412,8 @@ export class HandTracker {
         if (this.onClear) this.onClear();
       }
     } else {
-      // Slow decay — 0.4 s to lose 1 s of progress; jitter-tolerant
-      this._thumbsUpTimer = Math.max(0, this._thumbsUpTimer - dt * 0.4);
+      // Faster decay (1.5 s/s) so a wrong hand-shape clears the progress
+      this._thumbsUpTimer = Math.max(0, this._thumbsUpTimer - dt * 1.5);
     }
   }
 
@@ -546,37 +549,48 @@ export class HandTracker {
     const prog = this._thumbsUpTimer / this._thumbsUpDuration;
     const rem  = (this._thumbsUpDuration - this._thumbsUpTimer).toFixed(1);
     const cx   = W / 2, cy = H / 2;
-    const R    = 58;
+    const R    = 64;
 
     ctx.save();
-    // Background track
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Pill backdrop
+    ctx.fillStyle   = 'rgba(255,245,200,0.20)';
+    ctx.shadowColor = 'rgba(200,140,0,0.30)';
+    ctx.shadowBlur  = 24;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Background track ring
     ctx.beginPath();
     ctx.arc(cx, cy, R, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255,200,60,0.18)';
-    ctx.lineWidth   = 10;
+    ctx.strokeStyle = 'rgba(255,200,60,0.22)';
+    ctx.lineWidth   = 12;
     ctx.stroke();
 
-    // Fill arc
+    // Progress arc
     ctx.beginPath();
     ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2);
-    ctx.strokeStyle = `rgba(255,200,40,${0.55 + prog * 0.45})`;
-    ctx.lineWidth   = 10;
+    ctx.strokeStyle = `rgba(255,195,30,${0.60 + prog * 0.40})`;
+    ctx.lineWidth   = 12;
     ctx.lineCap     = 'round';
     ctx.stroke();
 
-    // Emoji + countdown inside ring
-    ctx.textAlign    = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font         = '34px system-ui';
-    ctx.fillText('👍', cx, cy - 10);
-    ctx.font      = 'bold 16px system-ui, sans-serif';
-    ctx.fillStyle = `rgba(220,160,20,${0.8 + prog * 0.2})`;
-    ctx.fillText(`${rem} s`, cx, cy + 22);
+    // Emoji + countdown
+    ctx.font      = '38px system-ui';
+    ctx.fillStyle = `rgba(255,220,40,${0.85 + prog * 0.15})`;
+    ctx.fillText('👍', cx, cy - 12);
+    ctx.font      = `bold ${14 + prog * 4}px system-ui, sans-serif`;
+    ctx.fillStyle = `rgba(230,160,20,0.95)`;
+    ctx.fillText(`${rem} s`, cx, cy + 24);
 
-    // Label below ring
-    ctx.font      = 'bold 14px system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(180,120,10,0.75)';
-    ctx.fillText('Hold to clear canvas', cx, cy + R + 20);
+    // Label below
+    ctx.font      = 'bold 15px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(180,110,10,0.80)';
+    ctx.fillText('👍  Hold to clear canvas', cx, cy + R + 28);
     ctx.restore();
   }
 
@@ -647,5 +661,17 @@ export class HandTracker {
     ctx.strokeStyle = '#fff';
     ctx.lineWidth   = 2;
     ctx.stroke();
+
+    // Thumb tip — gold beacon when thumbs-up is active
+    if (this._thumbsUpTimer > 0) {
+      const prog = this._thumbsUpTimer / this._thumbsUpDuration;
+      ctx.fillStyle   = `rgba(255,200,30,${0.7 + prog * 0.3})`;
+      ctx.strokeStyle = 'rgba(255,255,200,0.9)';
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.arc(px(4), py(4), 10 + prog * 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
   }
 }
