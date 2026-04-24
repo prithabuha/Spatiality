@@ -57,14 +57,11 @@ export class HandTracker {
     this._paintHoldDuration = 2.0;
     this._paintJustStarted  = false;   // one-frame flag for "start" flash
 
-    // 3-swipe wave-to-clear
-    this._prevWristX      = [null, null];
-    this._waveSwipeCount  = 0;    // 0 / 1 / 2 → at 3: clear
-    this._waveSwipeTimer  = 0;    // elapsed while both wrists moving fast
-    this._waveSwipePause  = 0;    // mandatory gap between registered swipes
-    this._waveWindowTimer = 0;    // overall 5-second window
-    this._waveCooldown    = 0;    // post-clear cooldown
-    this._waveFlash       = 0;    // success flash alpha
+    // 👍 Thumbs-up hold-to-clear
+    this._thumbsUpTimer    = 0;
+    this._thumbsUpDuration = 5.0;  // seconds to hold thumbs-up
+    this._clearCooldown    = 0;    // post-clear lockout
+    this._clearFlash       = 0;    // success flash alpha
 
     // Face detection
     this._faceDetector  = null;
@@ -119,7 +116,7 @@ export class HandTracker {
       if (prompt) prompt.style.display = 'none';
       const chip = document.getElementById('hint-chip');
       if (chip) chip.textContent =
-        'Hold index finger 2 s to paint  ·  Wave both hands 3 times to clear the canvas ✦';
+        'Hold index finger 2 s to paint  ·  👍 Thumbs up 5 s to clear the canvas ✦';
 
       // Face detector loads in background — non-blocking, non-critical
       this._initFaceDetector().catch(e =>
@@ -237,7 +234,7 @@ export class HandTracker {
         await this._startCamera();
         this.ready = true;
         if (chip) chip.textContent =
-          'Hold index finger 2 s to paint  ·  Wave both hands 3 times to clear the canvas ✦';
+          'Hold index finger 2 s to paint  ·  👍 Thumbs up 5 s to clear the canvas ✦';
       } catch (err) {
         console.error('Camera retry failed:', err);
         this._showCameraError(err);
@@ -288,23 +285,22 @@ export class HandTracker {
 
     if (this.numHands >= 2) {
       this._process(results.landmarks[0], dt);
-      this._checkWave(results.landmarks[0], results.landmarks[1], dt);
+      this._checkThumbsUp(results.landmarks[0], dt);
       this._drawSkeleton(results.landmarks[0]);
       this._drawSkeleton(results.landmarks[1]);
       this._drawHUD(results.landmarks[0]);
-      this._drawWaveIndicator(dt);
     } else if (this.numHands === 1) {
-      this._waveSwipeTimer = 0;
-      this._prevWristX     = [null, null];
       this._process(results.landmarks[0], dt);
+      this._checkThumbsUp(results.landmarks[0], dt);
       this._drawSkeleton(results.landmarks[0]);
       this._drawHUD(results.landmarks[0]);
     } else {
       this._reset();
     }
+    this._drawThumbsUpIndicator();
 
-    if (this._waveCooldown > 0) this._waveCooldown -= dt;
-    if (this._waveFlash   > 0) this._waveFlash   -= dt;
+    if (this._clearCooldown > 0) this._clearCooldown -= dt;
+    if (this._clearFlash    > 0) this._clearFlash    -= dt;
   }
 
   // ── Update active face from detector results ──────────────────────────────
@@ -386,56 +382,36 @@ export class HandTracker {
     this.paintHoldProgress = this._paintHoldTimer / this._paintHoldDuration;
   }
 
-  // ── 3-swipe wave-to-clear ─────────────────────────────────────────────────
-  // Each "swipe" = both wrists moving fast for 0.2 s, then a 0.3 s pause.
-  // 3 swipes within 5 seconds → onClear().
-  _checkWave(lm1, lm2, dt) {
-    if (this._waveCooldown > 0) return;
+  // ── 👍 Thumbs-up gesture detection ───────────────────────────────────────
+  // Thumb tip must be above wrist; all four fingers must be curled closed.
+  _isThumbsUp(lm) {
+    const thumbUp     = lm[4].y < lm[2].y && lm[4].y < lm[0].y;
+    const indexCurled = lm[8].y  > lm[6].y;
+    const midCurled   = lm[12].y > lm[10].y;
+    const ringCurled  = lm[16].y > lm[14].y;
+    const pinkyCurled = lm[20].y > lm[18].y;
+    return thumbUp && indexCurled && midCurled && ringCurled && pinkyCurled;
+  }
 
-    const w1x = 1 - lm1[0].x;
-    const w2x = 1 - lm2[0].x;
+  // Hold thumbs-up for 5 s → onClear().
+  // Works with one hand OR both — whichever the primary hand is.
+  // Timer decays slowly on drop so brief jitter doesn't reset progress.
+  _checkThumbsUp(lm, dt) {
+    if (this._clearCooldown > 0) return;
 
-    if (this._prevWristX[0] !== null) {
-      const v1 = Math.abs((w1x - this._prevWristX[0]) / dt);
-      const v2 = Math.abs((w2x - this._prevWristX[1]) / dt);
-      const bothFast = v1 > 0.6 && v2 > 0.6;
-
-      // Mandatory inter-swipe pause
-      if (this._waveSwipePause > 0) {
-        this._waveSwipePause -= dt;
-      } else if (bothFast) {
-        this._waveSwipeTimer += dt;
-        if (this._waveSwipeTimer >= 0.20) {
-          // Registered one swipe
-          this._waveSwipeTimer = 0;
-          this._waveSwipePause = 0.30;
-          if (this._waveSwipeCount === 0) this._waveWindowTimer = 0;
-          this._waveSwipeCount++;
-
-          if (this._waveSwipeCount >= 3) {
-            this._waveSwipeCount  = 0;
-            this._waveWindowTimer = 0;
-            this._waveCooldown    = 2.0;
-            this._waveFlash       = 0.8;
-            if (this.onClear) this.onClear();
-          }
-        }
-      } else {
-        // Not moving fast — decay swipe accumulator
-        this._waveSwipeTimer = Math.max(0, this._waveSwipeTimer - dt * 3);
+    if (this._isThumbsUp(lm)) {
+      this._thumbsUpTimer = Math.min(this._thumbsUpDuration,
+                                     this._thumbsUpTimer + dt);
+      if (this._thumbsUpTimer >= this._thumbsUpDuration) {
+        this._thumbsUpTimer = 0;
+        this._clearCooldown = 2.5;
+        this._clearFlash    = 0.9;
+        if (this.onClear) this.onClear();
       }
-
-      // Window: 3 swipes must happen within 5 seconds
-      if (this._waveSwipeCount > 0) {
-        this._waveWindowTimer += dt;
-        if (this._waveWindowTimer > 5.0) {
-          this._waveSwipeCount  = 0;
-          this._waveWindowTimer = 0;
-        }
-      }
+    } else {
+      // Slow decay — 0.4 s to lose 1 s of progress; jitter-tolerant
+      this._thumbsUpTimer = Math.max(0, this._thumbsUpTimer - dt * 0.4);
     }
-    this._prevWristX[0] = w1x;
-    this._prevWristX[1] = w2x;
   }
 
   // ── Helper: which fingers are extended ────────────────────────────────────
@@ -457,11 +433,7 @@ export class HandTracker {
     this._posHistory       = [];
     this._paintHoldTimer   = 0;
     this._paintJustStarted = false;
-    this._prevWristX       = [null, null];
-    this._waveSwipeTimer   = 0;
-    this._waveSwipeCount   = 0;
-    this._waveSwipePause   = 0;
-    this._waveWindowTimer  = 0;
+    this._thumbsUpTimer    = 0;
   }
 
   // ── HUD drawing ───────────────────────────────────────────────────────────
@@ -548,68 +520,63 @@ export class HandTracker {
     }
   }
 
-  // ── Wave indicator ────────────────────────────────────────────────────────
-  _drawWaveIndicator(dt) {
+  // ── 👍 Thumbs-up clear indicator ─────────────────────────────────────────
+  _drawThumbsUpIndicator() {
     const ctx = this.ctx;
     const W = this.overlay.width, H = this.overlay.height;
 
-    // Success flash
-    if (this._waveFlash > 0) {
-      const alpha = this._waveFlash / 0.8;
+    // ── Success flash ──────────────────────────────────────────────────────
+    if (this._clearFlash > 0) {
+      const a = this._clearFlash / 0.9;
       ctx.save();
-      ctx.fillStyle = `rgba(255,200,50,${alpha * 0.18})`;
+      ctx.fillStyle = `rgba(255,230,80,${a * 0.20})`;
       ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = `rgba(255,200,50,${alpha})`;
-      ctx.font = 'bold 48px system-ui';
-      ctx.textAlign = 'center';
+      ctx.textAlign    = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('🌊 Cleared!', W / 2, H / 2);
+      ctx.fillStyle    = `rgba(255,210,30,${a})`;
+      ctx.font         = 'bold 56px system-ui';
+      ctx.fillText('👍 Canvas Cleared!', W / 2, H / 2);
       ctx.restore();
       return;
     }
 
-    // In-progress: show swipe dots + current swipe progress bar
-    const swipeInProgress = this._waveSwipeTimer > 0 || this._waveSwipeCount > 0;
-    if (!swipeInProgress) return;
+    if (this._thumbsUpTimer <= 0) return;
 
-    const cx = W / 2;
+    // ── In-progress: large ring + countdown ───────────────────────────────
+    const prog = this._thumbsUpTimer / this._thumbsUpDuration;
+    const rem  = (this._thumbsUpDuration - this._thumbsUpTimer).toFixed(1);
+    const cx   = W / 2, cy = H / 2;
+    const R    = 58;
+
     ctx.save();
+    // Background track
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,200,60,0.18)';
+    ctx.lineWidth   = 10;
+    ctx.stroke();
+
+    // Fill arc
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,200,40,${0.55 + prog * 0.45})`;
+    ctx.lineWidth   = 10;
+    ctx.lineCap     = 'round';
+    ctx.stroke();
+
+    // Emoji + countdown inside ring
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
+    ctx.font         = '34px system-ui';
+    ctx.fillText('👍', cx, cy - 10);
+    ctx.font      = 'bold 16px system-ui, sans-serif';
+    ctx.fillStyle = `rgba(220,160,20,${0.8 + prog * 0.2})`;
+    ctx.fillText(`${rem} s`, cx, cy + 22);
 
-    // Label
-    ctx.fillStyle = 'rgba(100,180,255,0.90)';
-    ctx.font      = 'bold 20px system-ui';
-    ctx.fillText('🌊  WAVE BOTH HANDS 3 TIMES TO CLEAR THE CANVAS', cx, 46);
-
-    // Dots  ● ● ●  filled as swipes are registered
-    const dotR = 10, dotGap = 32, dotsY = 76;
-    for (let i = 0; i < 3; i++) {
-      const dx = cx + (i - 1) * dotGap;
-      ctx.beginPath();
-      ctx.arc(dx, dotsY, dotR, 0, Math.PI * 2);
-      if (i < this._waveSwipeCount) {
-        ctx.fillStyle = 'rgba(100,200,255,0.95)';
-        ctx.fill();
-      } else {
-        ctx.strokeStyle = 'rgba(100,200,255,0.50)';
-        ctx.lineWidth   = 2;
-        ctx.stroke();
-      }
-    }
-
-    // Current swipe progress arc (inside the next dot to fill)
-    const nextDot = this._waveSwipeCount;
-    if (nextDot < 3 && this._waveSwipeTimer > 0) {
-      const prog = this._waveSwipeTimer / 0.20;
-      const dx   = cx + (nextDot - 1) * dotGap;
-      ctx.strokeStyle = 'rgba(100,200,255,0.80)';
-      ctx.lineWidth   = 3;
-      ctx.lineCap     = 'round';
-      ctx.beginPath();
-      ctx.arc(dx, dotsY, dotR + 4, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2);
-      ctx.stroke();
-    }
+    // Label below ring
+    ctx.font      = 'bold 14px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(180,120,10,0.75)';
+    ctx.fillText('Hold to clear canvas', cx, cy + R + 20);
     ctx.restore();
   }
 

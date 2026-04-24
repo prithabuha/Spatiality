@@ -677,7 +677,7 @@ function flashHint(msg) {
   hintChip.textContent = msg;
   clearTimeout(flashHint._t);
   flashHint._t = setTimeout(() => {
-    hintChip.textContent = 'Hold index finger 2 s to paint  ·  Wave both hands 3 times to clear the canvas ✦';
+    hintChip.textContent = 'Hold index finger 2 s to paint  ·  👍 Thumbs up 5 s to clear the canvas ✦';
   }, 1800);
 }
 
@@ -771,7 +771,7 @@ tracker.onClear = () => {
   gpgpu.triggerRipple(0.5, 0.5);
   playWaveSound();
   haptic([60, 40, 60]);
-  flashHint('🌊 Clearing…');
+  flashHint('👍 Clearing…');
   // Stage 2: clear all buffers after ripple finishes (~650 ms)
   setTimeout(() => {
     gpgpu.clear();
