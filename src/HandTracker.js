@@ -69,6 +69,7 @@ export class HandTracker {
     // Face detection
     this._faceDetector  = null;
     this._activeFaceBox = null;   // { x, y, w, h } normalised, primary face
+    this._numFaces      = 0;      // how many faces currently detected
     this._lastFaceTime  = -1;     // avoid re-running every frame
 
     this._overlayWidth  = 0;
@@ -308,6 +309,7 @@ export class HandTracker {
 
   // ── Update active face from detector results ──────────────────────────────
   _updateActiveFace(detections) {
+    this._numFaces = detections.length;
     if (!detections.length) { this._activeFaceBox = null; return; }
 
     // Primary face = largest bounding-box area (proxy for "closest to camera")
@@ -350,15 +352,15 @@ export class HandTracker {
     }
 
     // ── Face-based active-user gate ────────────────────────────────────────
-    // If face detection is running and found multiple people, only accept the
-    // hand whose wrist is in the same horizontal zone as the primary face.
+    // Only activates when ≥2 faces are visible (crowded room scenario).
+    // With a single person the gate is off — no false blocks.
+    // Tolerance = 5× face width to handle arms extended sideways.
     const wristX = 1 - lm[0].x;
-    if (this._activeFaceBox) {
+    if (this._numFaces >= 2 && this._activeFaceBox) {
       const fc = this._activeFaceBox.x + this._activeFaceBox.w / 2;
       const fw = this._activeFaceBox.w;
-      if (Math.abs(wristX - fc) > fw * 3.0) {
-        // This hand is too far from the primary face — ignore it
-        this._paintHoldTimer = 0;
+      if (Math.abs(wristX - fc) > fw * 5.0) {
+        this._paintHoldTimer   = 0;
         this.isPainting        = false;
         this.paintHoldProgress = 0;
         return;
@@ -366,20 +368,21 @@ export class HandTracker {
     }
 
     // ── 2-second hold to start painting ───────────────────────────────────
+    // Decay is 5× slower than fill so brief jitter (~2 frames) barely dents
+    // the progress ring instead of hard-resetting it to zero.
     const ext = this._extended(lm);
+    const prev = this._paintHoldTimer;
     if (ext.index) {
-      const prev = this._paintHoldTimer;
       this._paintHoldTimer = Math.min(this._paintHoldDuration,
                                       this._paintHoldTimer + dt);
-      const wasReady = prev >= this._paintHoldDuration;
-      const  isReady = this._paintHoldTimer >= this._paintHoldDuration;
-      this._paintJustStarted = isReady && !wasReady;
-      this.isPainting        = isReady;
     } else {
-      this._paintHoldTimer   = 0;
-      this.isPainting        = false;
-      this._paintJustStarted = false;
+      // Slow decay — loses ~0.3 s per second when finger drops
+      this._paintHoldTimer = Math.max(0, this._paintHoldTimer - dt * 0.15 * this._paintHoldDuration);
     }
+    const wasReady = prev     >= this._paintHoldDuration;
+    const  isReady = this._paintHoldTimer >= this._paintHoldDuration;
+    this._paintJustStarted = isReady && !wasReady;
+    this.isPainting        = isReady;
     this.paintHoldProgress = this._paintHoldTimer / this._paintHoldDuration;
   }
 
@@ -395,7 +398,7 @@ export class HandTracker {
     if (this._prevWristX[0] !== null) {
       const v1 = Math.abs((w1x - this._prevWristX[0]) / dt);
       const v2 = Math.abs((w2x - this._prevWristX[1]) / dt);
-      const bothFast = v1 > 0.9 && v2 > 0.9;
+      const bothFast = v1 > 0.6 && v2 > 0.6;
 
       // Mandatory inter-swipe pause
       if (this._waveSwipePause > 0) {
