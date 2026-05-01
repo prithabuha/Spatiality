@@ -1,0 +1,844 @@
+/* ════════════════════════════════════════════════════════════════════
+   kiosk.css — Spatiality Kiosk  ·  1920 × 1080 px
+   Stage columns: 360 (water) + 600 (color PRIMARY) + 480 + 480 = 1920
+   Topbar: 80 px  ·  Stage: 1000 px
+   Spacing: 8 px grid throughout
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── Register --active-color as a typed property so CSS can transition it ── */
+@property --active-color {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #E11D48;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* ── Palette ────────────────────────────────────────────────── */
+  --bg:       #e8e6e1;
+  --surface:  #edecea;
+  --nm-light: rgba(255,255,255,0.92);
+  --nm-dark:  rgba(148,138,126,0.72);   /* deeper — shadows read at distance */
+
+  /* ── Neumorphic shadow tokens ───────────────────────────────── */
+  --nm-raised:
+    10px 10px 26px var(--nm-dark),
+   -10px -10px 26px var(--nm-light);
+  --nm-pressed:
+    inset  7px  7px 16px var(--nm-dark),
+    inset -7px -7px 16px var(--nm-light);
+
+  /* ── Ink scale ──────────────────────────────────────────────── */
+  --ink:     #1c1a17;
+  --ink-mid: #58534e;
+  --ink-dim: #9a9590;
+
+  /* ── Live color — set by JS on every colour pick ────────────── */
+  --active-color: #E11D48;
+
+  /* ── 8 px spacing grid ──────────────────────────────────────── */
+  --sp-1:  8px;
+  --sp-2: 16px;
+  --sp-3: 24px;
+  --sp-4: 32px;
+  --sp-5: 40px;
+  --sp-6: 48px;
+  --sp-7: 56px;
+  --sp-8: 64px;
+
+  /* ── Radius family ──────────────────────────────────────────── */
+  --r-pill:  999px;
+  --r-card:  44px;     /* selection cards */
+  --r-sm:    24px;     /* small chips */
+
+  /* ── Type ───────────────────────────────────────────────────── */
+  --fd: 'Fredoka One', cursive;
+  --fu: 'Quicksand', sans-serif;
+}
+
+/* ── Base ──────────────────────────────────────────────────────────── */
+html, body {
+  width: 100vw; height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  font-family: var(--fu);
+  -webkit-font-smoothing: antialiased;
+  touch-action: none;
+  user-select: none;
+}
+
+#kiosk-root {
+  position: absolute;
+  top: 0; left: 0;
+  width: 1920px;
+  height: 1080px;
+  background: var(--bg);
+  transform-origin: top left;
+  transform: scale(var(--ks, 1));
+  overflow: hidden;
+}
+
+/* ── Screen system ─────────────────────────────────────────────────── */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.40s ease;
+}
+.screen.active { opacity: 1; pointer-events: all; }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   SCREEN 1 — WELCOME
+   ══════════════════════════════════════════════════════════════════ */
+#screen-welcome {
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-8);
+  overflow: hidden;
+}
+
+.wlc-bubbles { position: absolute; inset: 0; pointer-events: none; }
+.wb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.15;
+  animation: blobFloat 11s ease-in-out infinite;
+}
+.wb1 { width:520px; height:520px; background:#E02A3A; top:-80px;  left:-60px;  animation-delay: 0s;   }
+.wb2 { width:380px; height:380px; background:#1848C8; bottom:-60px; left:80px;  animation-delay: 2.8s; }
+.wb3 { width:640px; height:640px; background:#E09A00; top:-100px; right:-80px; animation-delay: 1.4s; }
+.wb4 { width:340px; height:340px; background:#12966A; bottom:-40px; right:100px; animation-delay: 4s;  }
+
+@keyframes blobFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%       { transform: translateY(-30px) scale(1.06); }
+}
+
+.wlc-body {
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+.wlc-title {
+  font-family: var(--fd);
+  font-size: 160px;
+  line-height: 1;
+  letter-spacing: 8px;
+  filter: drop-shadow(0 6px 24px rgba(0,0,0,0.10));
+}
+.wlc-sub {
+  font-size: 44px;
+  font-weight: 600;
+  color: var(--ink-mid);
+  margin-top: var(--sp-3);
+  letter-spacing: 0.5px;
+}
+
+/* ── CTA button — breathing animation shows it is the one thing to press ── */
+.btn-start {
+  font-family: var(--fd);
+  font-size: 56px;
+  color: #fff;
+  background: linear-gradient(140deg, #E02A3A, #c01840);
+  border: none;
+  border-radius: var(--r-pill);
+  padding: var(--sp-4) 120px;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  box-shadow:
+    12px 12px 32px rgba(200,26,60,0.38),
+    -4px -4px 14px rgba(255,255,255,0.52);
+  animation: btnBreathe 2.8s ease-in-out infinite;
+  transition: transform 0.10s cubic-bezier(0.4,0,0.2,1);
+}
+.btn-start:active { transform: scale(0.97); animation-play-state: paused; }
+
+/* Pulsing ring outside the button */
+.btn-start::after {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  border-radius: inherit;
+  border: 2px solid rgba(224,42,58,0.32);
+  animation: ringPulse 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes btnBreathe {
+  0%, 100% { box-shadow: 12px 12px 32px rgba(200,26,60,0.38), -4px -4px 14px rgba(255,255,255,0.52); }
+  50%       { box-shadow: 16px 16px 48px rgba(200,26,60,0.54), -4px -4px 14px rgba(255,255,255,0.52); }
+}
+@keyframes ringPulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50%       { opacity: 0.85; transform: scale(1.04); }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   SCREEN 2 — CONTROLS
+   ══════════════════════════════════════════════════════════════════ */
+#screen-controls { background: var(--bg); }
+
+/* ── Topbar — 80 px ──────────────────────────────────────────────── */
+.ctrl-topbar {
+  width: 1920px;
+  height: 80px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--sp-8);
+  background: var(--bg);
+  border-bottom: 1px solid rgba(0,0,0,0.07);
+}
+
+.topbar-logo {
+  font-family: var(--fd);
+  font-size: 32px;
+  color: #E02A3A;
+  letter-spacing: 0.4px;
+}
+
+.topbar-hint {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink-dim);
+  background: var(--surface);
+  padding: 11px 30px;
+  border-radius: var(--r-pill);
+  box-shadow: var(--nm-raised);
+  letter-spacing: 0.2px;
+}
+
+/* ── "Done" is a real action — give it proper button weight ─────── */
+.btn-done {
+  font-family: var(--fd);
+  font-size: 26px;
+  color: #fff;
+  background: #12966A;
+  border: none;
+  border-radius: var(--r-pill);
+  padding: var(--sp-2) var(--sp-5);
+  cursor: pointer;
+  box-shadow: 5px 5px 18px rgba(18,150,106,0.40);
+  transition: transform 0.10s cubic-bezier(0.4,0,0.2,1), box-shadow 0.10s ease;
+}
+.btn-done:active {
+  transform: scale(0.96);
+  box-shadow: 3px 3px 8px rgba(18,150,106,0.30);
+}
+
+
+/* ── Stage ───────────────────────────────────────────────────────── */
+.ctrl-stage {
+  width: 1920px;
+  height: 1000px;
+  display: flex;
+  align-items: stretch;
+}
+
+/* Base column — default width 480 px, overridden per-column below */
+.ctrl-col {
+  width: 480px;
+  height: 1000px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 68px;    /* anchors every col-label to the same Y as the water title */
+  gap: var(--sp-4);     /* 32 px between col-header and ctrl-body */
+  position: relative;
+}
+
+/* ctrl-body fills whatever height remains after the header and centers its content */
+.ctrl-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+/* Color column stacks wheel + name chip vertically inside ctrl-body */
+.ctrl-body-col {
+  flex-direction: column;
+  gap: var(--sp-3);     /* 24 px between wheel and color-name chip */
+}
+
+/* Water column is narrower — it's a supporting slider */
+.ctrl-col-water { width: 360px; }
+
+/* Color column is wider — it is the PRIMARY control */
+.ctrl-col-center {
+  width: 600px;
+  overflow: hidden;      /* clips the ambient glow blob */
+}
+
+/* Column separators */
+.ctrl-col + .ctrl-col::before {
+  content: '';
+  position: absolute;
+  left: 0; top: var(--sp-8); bottom: var(--sp-8);
+  width: 1px;
+  background: rgba(0,0,0,0.09);
+}
+
+/* All direct children of the color col sit above the ambient glow */
+.ctrl-col-center > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Section header (label + hint) above every control ──────────── */
+.col-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);     /* 8 px */
+  flex-shrink: 0;
+}
+.col-label {
+  font-family: var(--fd);
+  font-size: 46px;
+  color: var(--ink);
+  letter-spacing: 0.3px;
+  line-height: 1;
+}
+.col-hint {
+  font-family: var(--fu);        /* Quicksand */
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.8px;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   WATER CAPSULE
+   Col: 360 px  ·  Capsule: 90 × 680 px
+   Track: WET(24) + 16 + capsule(680) + 16 + DRY(24) = 760 px
+   ───────────────────────────────────────────────────────────────── */
+.water-track {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);    /* 16 px */
+  flex-shrink: 0;
+}
+.water-ext {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 2.4px;
+}
+
+.water-capsule {
+  position: relative;
+  width: 90px;
+  height: 680px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: var(--nm-raised);
+  cursor: pointer;
+  touch-action: none;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.water-fill {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  border-radius: var(--r-pill);
+  background: linear-gradient(to top,
+    #072f80  0%,
+    #1057c8 32%,
+    #1a80e8 62%,
+    #72cbff 100%);
+  pointer-events: none;
+  transition: height 0.08s linear;
+}
+.water-drop {
+  position: absolute;
+  left: 50%;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 2;
+  filter: drop-shadow(0 3px 10px rgba(26,127,232,0.50));
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   COLOR WHEEL — PRIMARY CONTROL
+   Col: 600 px  ·  Canvas display: 480 px (internal: 460 px)
+   wheel-nm padding: 14 px each side → outer: 508 px
+   Ambient glow (col-glow) transitions with --active-color
+   ───────────────────────────────────────────────────────────────── */
+
+/* Ambient glow — the blurred blob behind the wheel breathes the active colour */
+.col-glow {
+  position: absolute;
+  width: 560px;
+  height: 560px;
+  background: var(--active-color);
+  border-radius: 50%;
+  filter: blur(110px);
+  opacity: 0.10;
+  pointer-events: none;
+  z-index: 0;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  /* @property makes --active-color a typed <color>, enabling this transition */
+  transition: background 0.5s ease;
+}
+
+.wheel-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.wheel-nm {
+  border-radius: 50%;
+  padding: 14px;
+  background: var(--bg);
+  box-shadow: var(--nm-raised);
+  line-height: 0;
+}
+#color-wheel {
+  display: block;
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: none;
+  width: 480px;
+  height: 480px;
+}
+
+/* Center swatch — double-ring confirms the active colour at a glance */
+.color-center {
+  position: absolute;
+  width: 116px; height: 116px;
+  border-radius: 50%;
+  background: var(--active-color);
+  pointer-events: none;
+  z-index: 3;
+  box-shadow:
+    0 0 0 6px var(--bg),
+    0 0 0 10px var(--active-color),
+    0 10px 32px rgba(0,0,0,0.22),
+    inset 0 2px 6px rgba(255,255,255,0.28);
+  transition:
+    background   0.20s ease,
+    box-shadow   0.20s ease,
+    transform    0.15s ease;
+}
+
+/* Colour name chip — raised pill, text in active colour */
+.color-name {
+  font-family: var(--fd);
+  font-size: 28px;
+  letter-spacing: 0.4px;
+  color: var(--active-color);
+  background: var(--surface);
+  padding: 11px 36px;
+  border-radius: var(--r-pill);
+  box-shadow: var(--nm-raised);
+  flex-shrink: 0;
+  transition: color 0.20s ease;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   BRUSH TYPE — 3 selection cards
+   Col: 480 px  ·  Card: 428 × 184 px  ·  Stack: 3×184 + 2×16 = 584 px
+   Rule: every interactive element gets nm-raised at rest, nm-pressed + ring when active
+   Rule: SVG strokes use currentColor — active card preview renders in paint colour
+   ───────────────────────────────────────────────────────────────── */
+.type-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);    /* 24 px — more breathing room between cards */
+  flex-shrink: 0;
+}
+
+.type-card {
+  display: flex;
+  align-items: center;
+  width: 428px;
+  height: 184px;
+  border-radius: var(--r-card);  /* 44 px — consistent with size-card */
+  border: none;
+  background: var(--surface);
+  cursor: pointer;
+  box-shadow: var(--nm-raised);
+  padding: 0 var(--sp-5);       /* 40 px — wider padding keeps strokes away from card edge */
+  gap: var(--sp-2);             /* 16 px */
+  /* inactive: dark ink so strokes are readable against the surface */
+  color: #2a2a2a;
+  overflow: hidden;              /* hard clip — no stroke bleeds past the card */
+  transition:
+    box-shadow  0.16s ease,
+    background  0.16s ease,
+    color       0.20s ease,
+    transform   0.10s cubic-bezier(0.4,0,0.2,1);
+}
+/* Active: pressed shadow + coloured ring + strokes render in active paint colour */
+.type-card.active {
+  background: #d8d6d1;
+  color: var(--active-color);
+  box-shadow:
+    var(--nm-pressed),
+    0 0 0 3px var(--active-color);
+}
+.type-card:active { transform: scale(0.97); }
+
+.type-name {
+  font-family: var(--fd);
+  font-size: 28px;
+  color: var(--ink-mid);
+  min-width: 108px;
+  text-align: left;
+  flex-shrink: 0;
+  transition: color 0.14s;
+}
+.type-card.active .type-name { color: var(--ink); }
+
+.type-svg {
+  flex: 1;
+  height: 80px;
+  overflow: hidden;   /* clip at SVG element boundary — belt-and-suspenders with the padded viewBox */
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   BRUSH SIZE — 5 selection cards
+   Col: 480 px  ·  Card: 428 × 108 px  ·  Stack: 5×108 + 4×16 = 604 px
+   size-dot-zone: fixed 96 px wide container aligns all dots to a column
+   — the growing dots form a visual staircase as you scan down
+   ───────────────────────────────────────────────────────────────── */
+.size-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);    /* 16 px — matches type-stack */
+  flex-shrink: 0;
+}
+
+.size-card {
+  display: flex;
+  align-items: center;
+  width: 428px;
+  height: 108px;
+  border-radius: var(--r-card);  /* 44 px — same family as type-card */
+  border: none;
+  background: var(--surface);
+  cursor: pointer;
+  box-shadow: var(--nm-raised);
+  padding: 0 var(--sp-4);       /* symmetric 32 px */
+  gap: 0;
+  transition:
+    box-shadow  0.16s ease,
+    background  0.16s ease,
+    transform   0.10s cubic-bezier(0.4,0,0.2,1);
+}
+.size-card.active {
+  background: #d8d6d1;
+  box-shadow:
+    var(--nm-pressed),
+    0 0 0 3px var(--active-color);
+}
+.size-card:active { transform: scale(0.97); }
+
+.size-name {
+  font-family: var(--fd);
+  font-size: 28px;
+  color: var(--ink-mid);
+  flex: 1;
+  text-align: left;
+  transition: color 0.14s;
+}
+.size-card.active .size-name { color: var(--ink); }
+
+/* Fixed-width zone keeps all dots right-aligned in the same column */
+.size-dot-zone {
+  width: 96px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.size-dot {
+  border-radius: 50%;
+  background: var(--ink-dim);
+  display: block;
+  flex-shrink: 0;
+  transition: background 0.20s ease;
+}
+/* Active dot takes on the live paint colour — instant visual confirmation */
+.size-card.active .size-dot { background: var(--active-color); }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   SCREEN 3 — END
+   ══════════════════════════════════════════════════════════════════ */
+#screen-end {
+  background: var(--bg);
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.confetti-piece {
+  position: absolute;
+  border-radius: 2px;
+  opacity: 0;
+  animation: cFall 3.2s ease-in forwards;
+}
+@keyframes cFall {
+  0%   { opacity: 1; transform: translateY(-20px) rotate(0deg);    }
+  100% { opacity: 0; transform: translateY(1200px) rotate(600deg); }
+}
+
+.end-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-5);
+  position: relative;
+  z-index: 1;
+  width: 1400px;
+}
+.end-title {
+  font-family: var(--fd);
+  font-size: 72px;
+  color: var(--ink);
+  text-align: center;
+}
+
+.end-row {
+  display: flex;
+  gap: var(--sp-7);
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+/* ── Gallery frame ─────────────────────────────────────────────────────────── */
+.artwork-frame-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+.artwork-frame {
+  position: relative;
+  width: 560px;
+  height: 340px;
+  background: #251c10;          /* dark walnut */
+  padding: 18px;
+  border-radius: 6px;
+  /* layered frame: gold liner → dark → wide gold outer → neumorphic depth */
+  box-shadow:
+    0 0 0 3px  #C9A84C,
+    0 0 0 6px  #251c10,
+    0 0 0 18px #C9A84C,
+    0 0 0 20px #251c10,
+    14px 14px 36px var(--nm-dark),
+   -8px  -8px 24px var(--nm-light);
+  overflow: hidden;
+}
+
+.artwork-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border-radius: 2px;
+  transition: opacity 0.4s;
+}
+.artwork-loading.hidden { opacity: 0; pointer-events: none; }
+
+.artwork-pulse {
+  display: block;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--active-color);
+  animation: artPulse 1.3s ease-in-out infinite;
+}
+@keyframes artPulse {
+  0%, 100% { transform: scale(0.78); opacity: 0.45; }
+  50%       { transform: scale(1.18); opacity: 1;    }
+}
+
+.artwork-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.7s ease;
+}
+.artwork-img.loaded { opacity: 1; }
+
+.artwork-byline {
+  font-family: var(--fd);
+  font-size: 26px;
+  color: var(--ink-mid);
+  letter-spacing: 0.5px;
+  transition: color 0.4s;
+}
+
+/* ── Right column (name + QR) ──────────────────────────────────────────────── */
+.end-right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  align-items: stretch;
+  flex: 1;
+  max-width: 480px;
+}
+
+.end-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.end-name-label {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.end-name-input {
+  padding: var(--sp-3) var(--sp-4);
+  border: none;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: var(--nm-pressed);
+  font-family: var(--fu);
+  font-size: 34px;
+  font-weight: 600;
+  color: var(--ink);
+  outline: none;
+  touch-action: auto;
+  user-select: auto;
+  width: 100%;
+}
+
+/* ── QR code card ──────────────────────────────────────────────────────────── */
+.end-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--surface);
+  border-radius: 40px;
+  padding: var(--sp-4);
+  box-shadow: var(--nm-raised);
+  min-height: 260px;
+  justify-content: center;
+}
+
+/* inner wrapper — same layout for both states */
+.qr-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+}
+
+/* waiting / loading text */
+.qr-wait-text {
+  font-family: var(--fd);
+  font-size: 26px;
+  color: var(--ink-dim);
+  animation: qrWaitPulse 1.6s ease-in-out infinite;
+}
+@keyframes qrWaitPulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1;   }
+}
+
+/* canvas container — pressed-in surface to frame the QR */
+.qr-canvas-wrap {
+  background: #F5F0EB;          /* warm cream = kiosk background tone */
+  border-radius: 22px;
+  padding: 16px;
+  box-shadow: var(--nm-pressed);
+}
+
+#qr-canvas {
+  display: block;
+  border-radius: 8px;
+}
+
+/* Brand label below QR — color tracks active paint colour */
+.qr-brand {
+  font-family: var(--fd);
+  font-size: 26px;
+  color: var(--active-color);
+  letter-spacing: 1.5px;
+  transition: color 0.35s ease;
+}
+
+.qr-hint {
+  font-family: var(--fu);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink-dim);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.end-btns { display: flex; gap: var(--sp-7); }
+
+/* Primary action button — filled, prominent */
+.btn-primary {
+  font-family: var(--fd);
+  font-size: 40px;
+  color: #fff;
+  background: linear-gradient(135deg, #12966A, #0d7a56);
+  border: none;
+  border-radius: var(--r-pill);
+  padding: var(--sp-4) 72px;
+  cursor: pointer;
+  box-shadow: 7px 7px 22px rgba(18,150,106,0.42);
+  transition: transform 0.10s cubic-bezier(0.4,0,0.2,1), box-shadow 0.10s ease;
+}
+.btn-primary:active {
+  transform: scale(0.97);
+  box-shadow: 4px 4px 10px rgba(18,150,106,0.30);
+}
+
+/* Secondary action button — surface, quiet */
+.btn-secondary {
+  font-family: var(--fd);
+  font-size: 40px;
+  color: var(--ink-mid);
+  background: var(--surface);
+  border: none;
+  border-radius: var(--r-pill);
+  padding: var(--sp-4) 72px;
+  cursor: pointer;
+  box-shadow: var(--nm-raised);
+  transition: transform 0.10s cubic-bezier(0.4,0,0.2,1), box-shadow 0.10s ease;
+}
+.btn-secondary:active {
+  transform: scale(0.97);
+  box-shadow: var(--nm-pressed);
+}

@@ -104,7 +104,9 @@ vec3 _kmAbsorb(vec3 baseRefl, vec3 pigRefl, float concentration) {
 
 vec3 _clampHueRange(vec3 hue) {
   float lum = _luma(hue);
-  float targetLum = clamp(lum, 0.10, 0.92);
+  // Floor at 0.022 allows genuine deep darks (heavy Prussian Blue, Ivory Black)
+  // while still preventing pure-black artefacts from numerical underflow.
+  float targetLum = clamp(lum, 0.022, 0.94);
   if (lum > 0.0005) hue *= targetLum / lum;
   return clamp(hue, 0.0, 1.0);
 }
@@ -124,27 +126,75 @@ void main() {
   // Per-pixel dryProgress: 0 = wet, 1 = locked
   float dryProgress = smoothstep(0.625, 1.0, dryTimer);
 
-  // ── BAKED LAYER LOCK ──────────────────────────────────────────────────────
-  bool fullyDried   = (dryProgress >= 0.98);
+  // ── PERMANENT LOCK — dried pixels are ALWAYS frozen ──────────────────────
+  //
+  // Removing the old `u_painting < 0.5` guard is the critical fix.
+  //
+  // Old behaviour (broken): when the user paints a SECOND stroke, u_painting
+  // was 1.0 globally, which bypassed this early-return for ALL pixels —
+  // including the already-dried first stroke.  With Section H (retention)
+  // also gated by u_painting < 0.5, dried pixels had zero protection and
+  // were gradually eroded by the simulation running on them, making the
+  // first stroke disappear the moment a second stroke was started.
+  //
+  // New behaviour (correct):
+  //   • Once a pixel's dryTimer causes dryProgress >= 0.68 it is PERMANENTLY
+  //     frozen — u_painting state is irrelevant.
+  //   • The ONLY way to "wake" a frozen pixel is for the velocity shader to
+  //     reset its dryTimer to 0 (which only happens when the brush physically
+  //     contacts that pixel).  Painting a new stroke elsewhere has zero effect
+  //     on already-dried pixels.
+  //   • This means layers accumulate correctly: first stroke stays visible as
+  //     a permanent stain while subsequent strokes are independently painted.
+  bool fullyDried   = (dryProgress >= 0.68);
   bool neverPainted = (water < 0.004 && dryTimer < 0.001);
-  if ((fullyDried || neverPainted) && u_painting < 0.5) {
+  if (fullyDried || neverPainted) {
     gl_FragColor = prev;
     return;
   }
 
   // ── A. Semi-Lagrangian advection — baked-layer protection ────────────────
-  vec2 backPos = clamp(uv - vel * dt, tx, 1.0 - tx);
+  // Pigment behaves like thick watercolour embedded in paper fibres: it does
+  // not flow freely with the water film.  velScale is capped at 0.25 at all
+  // times (during and after painting) so pigment stays where it was deposited.
+  //
+  // dryVelFade: as dryProgress rises, capillary/residual flow is ramped from
+  // 25 % → ~2 % so it can no longer redistribute pigment away from its painted
+  // position before baking.  Without this, the 0.60 capillary kappa in the
+  // velocity shader depletes peak-pixel density to ~69 % by the time dryTimer
+  // reaches 1.0 — the root cause of faded baked colours.
+  float dryVelFade = 1.0 - smoothstep(0.15, 0.65, dryProgress) * 0.92;
+
+  // Hollow-stroke fix: during painting velScale was 1.0, which let the
+  // hydrostatic outward pressure (g_hydro=2.0) sweep pigment from stroke
+  // centres to edges.  Semi-Lagrangian advection then traced edge pixels
+  // back to the centre (correct) but centre pixels back to blank paper
+  // (wrong) — leaving a white void.  Clamping to 0.25 during painting
+  // keeps pigment where the brush deposited it; wet-on-wet blending
+  // (Sections B/E) and brush stamps (Section F) still handle spreading.
+  float velScale = 0.25 * dryVelFade;   // same cap whether painting or not
+  vec2 backPos = clamp(uv - vel * dt * velScale, tx, 1.0 - tx);
 
   vec4  backFluid    = texture2D(tVelocity, backPos);
   float backDryTimer = backFluid.a;
   float backDryProg  = smoothstep(0.625, 1.0, backDryTimer);
 
   vec4 advected;
-  if (backDryProg >= 0.90) {
-    // Source pixel locked — do not smear baked pigment
+  // Also protect the CURRENT pixel: if it has little water, advection cannot
+  // drain paint from it.  Raised threshold 0.015 → 0.05 to catch more cases.
+  if (water < 0.05 || backDryProg >= 0.90) {
+    // Near-dry current pixel OR locked source — preserve paint exactly
     advected = prev;
   } else {
     advected = mix(texture2D(tPigment, backPos), prev, backDryProg * 0.85);
+  }
+
+  // Secondary hollow-stroke guard: even at 0.25 velScale, if there is
+  // established dense paint at this pixel and advection would reduce it by
+  // more than 10 %, clamp back toward prev.  Deposition (Section F) handles
+  // any new pigment; we must not let residual flow erode it.
+  if (u_painting > 0.5 && prev.a > 0.15 && advected.a < prev.a * 0.90) {
+    advected = mix(advected, prev, 0.85);
   }
 
   float newA   = advected.a;
@@ -152,10 +202,15 @@ void main() {
 
   // ── B. Wet-on-wet diffusion (Laplacian + capillary flow) ─────────────────
   // Diffusion gated by (1 - dryProgress): fully dry = zero diffusion.
-  // Tint-style diffusion: strong wet-on-wet bleeding.
-  // Quadratic + linear water dependency creates natural flow:
-  //   lots of water → fast spreading, little water → pigment stays put.
-  float D = (water * water * 0.048 + water * 0.008) * u_backrunStrength;
+  // Halved constants vs original so paint does not spread thin enough to
+  // expose the white paper beneath the stroke centre.
+  // When not painting, halve again — only the active brush gets full spread.
+  // Reduce passive diffusion (brush not active) so paint stays concentrated
+  // between strokes instead of spreading to invisible thinness.
+  // 0.06 passive diffusion (brush not active) — near-zero spread so the
+  // stain boundary stays tight and paint doesn't silently thin between strokes.
+  float diffMul = (u_painting > 0.5) ? 1.0 : 0.06;
+  float D = (water * water * 0.022 + water * 0.004) * u_backrunStrength * diffMul;
   D *= (1.0 - dryProgress);
 
   // Burst: new stroke landing on existing wet paint → turbulent bleed
@@ -251,9 +306,11 @@ void main() {
   float granInfluence = water * u_granulationStrength;
   float dryGrainBoost = dryProgress * 0.60 * u_granulationStrength;
 
-  // Deposition: pigment INTO valleys, AWAY from peaks
+  // Deposition: pigment INTO valleys, AWAY from peaks.
+  // wipeFromPeak at 0.010 — minimal stripping so granulation adds texture
+  // without erasing colour.  depositValley unchanged for natural settling.
   float depositValley = valley * gran * newA * 0.080 * granInfluence;
-  float wipeFromPeak  = peak   * gran * newA * 0.055 * granInfluence;
+  float wipeFromPeak  = peak   * gran * newA * 0.010 * granInfluence;
   float drySettle     = valley * gran * newA * 0.035 * dryGrainBoost;
 
   newA = clamp(newA + depositValley - wipeFromPeak + drySettle, 0.0, 1.0);
@@ -268,8 +325,9 @@ void main() {
       float angle = gnoise(uv*18.0 + u_time*0.45) * 6.2832;
       vec2  bv    = vec2(cos(angle), sin(angle)) * tx * 1.0 * bloomZone;
       vec4  bs    = texture2D(tPigment, uv - bv);
-      newRGB = mix(newRGB, bs.rgb, bloomZone * 0.050 * u_backrunStrength * bloomScale);
-      newA   = mix(newA,   bs.a,   bloomZone * 0.042 * u_backrunStrength * bloomScale);
+      // Halved bloom mix — prevents the cauliflower hollow-centre look
+      newRGB = mix(newRGB, bs.rgb, bloomZone * 0.025 * u_backrunStrength * bloomScale);
+      newA   = mix(newA,   bs.a,   bloomZone * 0.021 * u_backrunStrength * bloomScale);
     }
   }
 
@@ -370,7 +428,9 @@ void main() {
         outC = srcCol;
       }
 
-      float densityCeil = mix(0.62, 0.82, smoothstep(0.10, 0.55, water));
+      // Raised ceiling — allows heavy multi-layer applications to build up
+      // rich, dense stains as real watercolour does on cold-press paper.
+      float densityCeil = mix(0.80, 0.96, smoothstep(0.10, 0.55, water));
       float outA = min(compA, densityCeil);
       newRGB = clamp(outC * outA, vec3(0.0), vec3(1.0));
       newA   = clamp(outA, 0.0, 1.0);
@@ -395,20 +455,39 @@ void main() {
   }
 
   // ── H. Pigment retention / colour lock ───────────────────────────────────
+  // Two-tier lock:
+  //   lock > 0.90 (water < ~0.19): HARD freeze — paint is physically immobile,
+  //     density and colour are clamped to never decrease below prev values.
+  //   otherwise: soft retention floor that decays slowly (0.992/frame).
   if (u_painting < 0.5) {
-    float lock   = 1.0 - smoothstep(0.05, 0.75, water);
-    float retain = 0.94 + lock * 0.04 * u_retentionStrength;
-    newA = max(newA, prev.a * retain);
+    float lock = 1.0 - smoothstep(0.05, 0.75, water);
 
-    float safePrevA = max(prev.a, 0.001);
-    float safeNewA  = max(newA, 0.001);
-    vec3  prevHue   = prev.rgb / safePrevA;
-    vec3  curHue    = newRGB / safeNewA;
-    vec3  lockedHue = mix(curHue, prevHue, lock * 0.35 * u_retentionStrength);
-    newRGB = clamp(lockedHue, vec3(0.0), vec3(1.0)) * newA;
+    if (lock > 0.90) {
+      // Hard freeze: dry paint cannot lose density or shift colour
+      if (prev.a > newA) {
+        newA   = prev.a;
+        newRGB = prev.rgb;
+      }
+    } else {
+      // Soft retention: gentle floor while still wet — allows slow wet flow.
+      // 0.9993/frame: ~0.5% loss over the full 0.8 s wet window.
+      // Colours hold their density until the baked layer takes over.
+      float retainWet = 0.9993 + lock * 0.0007 * u_retentionStrength;
+      float retain    = mix(retainWet, 1.0, dryProgress * 0.92);
+      retain          = min(retain, 1.0);
+      newA = max(newA, prev.a * retain);
+
+      float safePrevA = max(prev.a, 0.001);
+      float safeNewA  = max(newA, 0.001);
+      vec3  prevHue   = prev.rgb / safePrevA;
+      vec3  curHue    = newRGB / safeNewA;
+      vec3  lockedHue = mix(curHue, prevHue, lock * 0.35 * u_retentionStrength);
+      newRGB = clamp(lockedHue, vec3(0.0), vec3(1.0)) * newA;
+    }
   }
 
-  newA = clamp(newA, 0.0, 0.88);
+  // Raised from 0.88 → 0.96 — allows genuine opaque staining on heavy applications
+  newA = clamp(newA, 0.0, 0.96);
   if (newA > 0.001) {
     vec3 hue = _clampHueRange(newRGB / newA);
     newRGB   = hue * newA;

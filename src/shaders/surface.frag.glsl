@@ -31,10 +31,13 @@ uniform vec2  u_screenSize;
 uniform vec2  u_paintUvOffset;
 uniform vec2  u_paintUvScale;
 uniform vec2  u_substrateTexelSize;
+uniform vec2  u_paintTexelSize;  // 1/simRes — for anti-aliased edge blur
 uniform vec2  u_paperTexScale;  // UV repeat scale per surface
 uniform float u_borderBlur;     // 0=sharp edge, 1=very soft dissolve
 
 // ── Noise ────────────────────────────────────────────────────────────────────
+float _hash1(float n) { return fract(sin(n) * 43758.5453123); }
+
 vec2 _h2(vec2 p) {
   p = vec2(dot(p,vec2(127.1,311.7)), dot(p,vec2(269.5,183.3)));
   return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
@@ -90,18 +93,47 @@ void main() {
   vec3  bumpN = normalize(N + vec3(-dhdx, -dhdy, 0.0));
   N = normalize(mix(N, bumpN, 0.50));
 
+  // ── Paper tooth normal map — grain peaks catch the light ─────────────────
+  // Sample u_paperTex at ±2 texels → finite-difference surface normals.
+  // The paper texture is isotropic Perlin FBM (no directional fibre lines),
+  // so these normals represent genuine random bumps, not a grid.
+  vec2 earlyPaperUV = vUv * u_paperTexScale;
+  float ptOfs = 2.0 / 1024.0;  // 2-texel step in paper texture UV space
+  float pt_R  = texture2D(u_paperTex, earlyPaperUV + vec2(ptOfs, 0.0)).r;
+  float pt_L  = texture2D(u_paperTex, earlyPaperUV - vec2(ptOfs, 0.0)).r;
+  float pt_U  = texture2D(u_paperTex, earlyPaperUV + vec2(0.0, ptOfs)).r;
+  float pt_D  = texture2D(u_paperTex, earlyPaperUV - vec2(0.0, ptOfs)).r;
+  float pt_dpdx = (pt_R - pt_L) * 3.5;
+  float pt_dpdy = (pt_U - pt_D) * 3.5;
+  vec3  paperToothN = normalize(N + vec3(-pt_dpdx, -pt_dpdy, 0.0));
+  N = normalize(mix(N, paperToothN, 0.50));
+
   // ── Soft continuous lighting — NO toon steps ──────────────────────────────
   // Smooth diffuse wrap: light wraps around surface for watercolour softness.
   // No harsh shadows, no stepped banding — just gentle luminance variation.
   float NdotL = dot(N, L);
-  float diffuse = clamp(NdotL * 0.40 + 0.60, 0.0, 1.0);  // wide wrap
+  float diffuse = clamp(NdotL * 0.35 + 0.68, 0.0, 1.0);  // wide wrap — brighter minimum
 
-  // ── Multi-scale paper grain (cold-press watercolour paper) ────────────────
+  // ── Isotropic paper grain — rotated Perlin FBM, no directional axis ────────
+  // Each octave rotated by a different angle → no grid, no straight lines.
+  // Matches: "use a Perlin noise displacement map instead of a grid."
+  // mat2(cos,-sin, sin,cos) rotation applied before each gnoise sample.
   float coarseGrain = hC;
-  float fineGrain   = _gnoise(vUv * 82.0) * 0.5 + 0.5;
-  float microGrain  = _gnoise(vUv * 220.0 + vec2(17.3, 43.7)) * 0.5 + 0.5;
-  float paperGrain  = coarseGrain * 0.50 + fineGrain * 0.32 + microGrain * 0.18;
-  paperGrain        = pow(paperGrain, 0.60);
+
+  mat2 gr1 = mat2( 0.7986,  0.6020, -0.6020,  0.7986);  //  37° — medium bumps
+  mat2 gr2 = mat2( 0.1908,  0.9816, -0.9816,  0.1908);  //  79° — fine peaks
+  mat2 gr3 = mat2(-0.5446,  0.8387, -0.8387, -0.5446);  // 123° — micro pits
+  mat2 gr4 = mat2(-0.9744,  0.2250, -0.2250, -0.9744);  // 167° — ultra-fine
+
+  float paperFBM = (_gnoise(       vUv  * 28.0) * 0.40
+                  + _gnoise(gr1  * vUv  * 62.0) * 0.27
+                  + _gnoise(gr2  * vUv  * 138.0) * 0.18
+                  + _gnoise(gr3  * vUv  * 305.0) * 0.10
+                  + _gnoise(gr4  * vUv  * 670.0) * 0.05)
+                  * 0.5 + 0.5;
+
+  float paperGrain = coarseGrain * 0.50 + paperFBM * 0.50;
+  paperGrain       = pow(paperGrain, 0.55);
 
   // (grainDryBoost applied below with combined texture)
 
@@ -111,18 +143,19 @@ void main() {
   vec3 paperTex = texture2D(u_paperTex, paperUV).rgb;
 
   // Blend procedural Worley grain with the canvas fibre texture
-  // → Worley controls pigment trapping; canvas texture controls visual look.
-  float combinedGrain = paperGrain * 0.45 + paperTex.r * 0.55;
-  combinedGrain = pow(clamp(combinedGrain, 0.0, 1.0), 0.62);
+  // → canvas fibre texture weighted higher → more physical paper feel.
+  float combinedGrain = paperGrain * 0.30 + paperTex.r * 0.70;
+  combinedGrain = pow(clamp(combinedGrain, 0.0, 1.0), 0.45);  // lower power → crispier grain peaks
 
-  // Grain intensifies as paint dries and settles into paper fibres
-  float grainDryBoost2 = 1.0 + dryProgress * 0.35;
+  // Grain intensifies slightly as paint dries — kept minimal to avoid perceived fading
+  float grainDryBoost2 = 1.0 + dryProgress * 0.05;
   combinedGrain = clamp(combinedGrain * grainDryBoost2, 0.0, 1.0);
 
-  // ── Watercolour paper surface — pure white cold-press ─────────────────────
-  // Real cotton-rag paper: pure white base, dark fiber valleys, bright ridges.
-  vec3 valleyCol = vec3(0.910, 0.910, 0.912);  // lighter valleys — reduce dark shadow at paint edges
-  vec3 ridgeCol  = vec3(0.990, 0.990, 0.992);  // near-white fiber ridges
+  // ── Watercolour paper surface — high-contrast warm cold-press ────────────
+  // Darker valleys, brighter ridges → grain contrast clearly legible through paint.
+  // Base tint matches #f9f7f1 (R:249 G:247 B:241) — warm white cotton-rag paper
+  vec3 valleyCol = vec3(0.800, 0.780, 0.755);  // warm-grey valleys
+  vec3 ridgeCol  = vec3(0.976, 0.969, 0.945);  // #f9f7f1 warm-white ridges
   vec3 paperColor = mix(valleyCol, ridgeCol, combinedGrain);
 
   // Apply soft diffuse lighting to paper
@@ -134,12 +167,12 @@ void main() {
   float sheenFactor = (1.0 - dryProgress) * wetness;
 
   // Smooth Blinn-Phong specular — wet paper glistens gently
-  float spec = pow(NdotH, 64.0) * 0.18 * sheenFactor;
+  float spec = pow(NdotH, 64.0) * 0.06 * sheenFactor;
   // Fresnel rim on wet edges
-  float fresnel = pow(1.0 - NdotV, 3.5) * sheenFactor * 0.10;
+  float fresnel = pow(1.0 - NdotV, 3.5) * sheenFactor * 0.04;
 
   vec4  paintDataSheen = texture2D(tPaint, simUV);
-  float densitySheen   = clamp(paintDataSheen.a * 2.5 + 0.15, 0.0, 1.0);
+  float densitySheen   = clamp(paintDataSheen.a * 2.5, 0.0, 1.0);
   canvas += (spec + fresnel) * densitySheen;
 
   // ── Paint UV lookup ───────────────────────────────────────────────────────
@@ -156,11 +189,40 @@ void main() {
     ? clamp(paintData.rgb / density, vec3(0.0), vec3(1.0))
     : vec3(0.0);
 
-  // ── Vibrance boost — saturated watercolour look ───────────────────────────
-  // High saturation expansion: pull away from grey toward pure hue.
-  // This is how Tint gets its vibrant, luminous colour-on-paper feel.
+  // ── Anti-aliased density for edge blending ───────────────────────────────
+  // 2-texel-radius 13-tap weighted blur on density before edge smoothstep.
+  // Spreads the edge transition over ~4 texels so it renders smoothly at any
+  // display resolution.  Colour and KM physics still use the exact centre
+  // sample — only the mix() blend factor benefits from the smooth gradient.
+  float tw = u_paintTexelSize.x;
+  float th = u_paintTexelSize.y;
+  float tw2 = tw * 2.0;
+  float th2 = th * 2.0;
+  float densitySmooth =
+      density                                                     * 6.0
+    + texture2D(tPaint, paintUV + vec2( tw,  0.0)).a             * 4.0
+    + texture2D(tPaint, paintUV + vec2(-tw,  0.0)).a             * 4.0
+    + texture2D(tPaint, paintUV + vec2( 0.0,  th)).a             * 4.0
+    + texture2D(tPaint, paintUV + vec2( 0.0, -th)).a             * 4.0
+    + texture2D(tPaint, paintUV + vec2( tw,   th)).a             * 2.0
+    + texture2D(tPaint, paintUV + vec2(-tw,   th)).a             * 2.0
+    + texture2D(tPaint, paintUV + vec2( tw,  -th)).a             * 2.0
+    + texture2D(tPaint, paintUV + vec2(-tw,  -th)).a             * 2.0
+    + texture2D(tPaint, paintUV + vec2(tw2,  0.0)).a             * 1.0
+    + texture2D(tPaint, paintUV + vec2(-tw2, 0.0)).a             * 1.0
+    + texture2D(tPaint, paintUV + vec2( 0.0, th2)).a             * 1.0
+    + texture2D(tPaint, paintUV + vec2( 0.0,-th2)).a             * 1.0;
+  densitySmooth /= 34.0;
+
+  // ── Vibrance boost — natural watercolour saturation ──────────────────────
+  // Moderate saturation lift: pull away from grey toward pure hue.
+  // Factor 1.65: vibrant but not neon.  Real watercolour is luminous because
+  // light passes THROUGH the translucent pigment and bounces off white paper —
+  // that luminosity comes from the KM thin-film model below, not from blowing
+  // out saturation.  Over-boosting (>2.0) clips channels and creates a
+  // synthetic "glowing" artefact.  1.65 gives richness without that effect.
   float luma = dot(paintHue, vec3(0.299, 0.587, 0.114));
-  vec3  vivid = mix(vec3(luma), paintHue, 1.95);  // strong saturation boost
+  vec3  vivid = mix(vec3(luma), paintHue, 1.65);
   vivid = clamp(vivid, 0.0, 1.0);
 
   // ── Kubelka-Munk thin-film reflectance ────────────────────────────────────
@@ -175,47 +237,83 @@ void main() {
   //   This matches the DiVerdi "Painting with Polygons" aesthetic where
   //   watercolour washes are luminous and transparent, not washed-out.
 
-  float thickness = density * 2.0;
+  // Reduced thickness multiplier → more transparent at low density.
+  // Old: density * 5.0 made light washes (density=0.2) behave like thick gouache.
+  // New: density * 3.2 keeps transparency at low density, opaque at high density:
+  //   density=0.10 → ~55% paper visible (light tint)
+  //   density=0.30 → ~20% paper visible (soft wash)
+  //   density=0.65 → ~4%  paper visible (rich stain)
+  float thickness = density * 1.6;
 
-  // K/S from paint hue — boosted absorption for saturated pigment
+  // K/S from paint hue — boosted absorption for rich pigment depth
   vec3 ks = _kmReflToKS(vivid);
-  ks *= 2.2;  // high K (absorption), low S (scattering) → vivid colour
+  ks *= 1.45;  // real-pigment absorption strength; slightly reduced from 1.6
 
   // Infinite-layer reflectance R∞ and extinction coefficient b
   vec3 Rinf = _kmKSToRefl(ks);
   vec3 b    = sqrt(ks * ks + 2.0 * ks);
 
   // Thin-film absorption: exponential decay through pigment layer
-  vec3 kmResult = Rinf + (canvas - Rinf) * exp(-b * thickness * 2.5);
+  vec3 kmResult = Rinf + (canvas - Rinf) * exp(-b * thickness * 2.0);
 
-  // ── Paper grain break-up at low density ───────────────────────────────────
-  // Reduced breakup: paint stays visible at edges instead of vanishing.
-  // Paper texture shows through only at very low density washes.
-  float granule      = smoothstep(0.40, 0.80, combinedGrain);
-  float grainBreakup = granule * 0.10 * clamp(1.0 - density * 3.0, 0.0, 1.0);
+  // ── Paper grain break-up through paint ────────────────────────────────────
+  // Grain clearly shows even through dense paint — valley fibres punch through.
+  // grainBreakup 0.55: grain visible at all paint densities including thick strokes.
+  // density * 0.85 → grain persists at high density (only fades at density > 1.17).
+  float granule      = smoothstep(0.25, 0.70, combinedGrain);
+  float grainBreakup = granule * 0.28 * clamp(1.0 - density * 1.20, 0.0, 1.0);
   kmResult = mix(kmResult, canvas, grainBreakup);
 
-  // ── Soft lighting on paint ────────────────────────────────────────────────
-  float surfaceShade = 0.88 + combinedGrain * 0.16;
-  float lightOnPaint = NdotL * 0.15 + 0.92;
+  // ── Soft lighting on paint — grain modulates paint brightness ────────────
+  float surfaceShade = 0.92 + combinedGrain * 0.10;  // gentle grain modulation, no darkening
+  float lightOnPaint = NdotL * 0.12 + 0.95;
   kmResult *= surfaceShade * lightOnPaint;
 
   // ── Wet dilution — water dilutes pigment concentration ────────────────────
-  float wetDilute = mix(1.0, 0.94, wetness * density);
+  float wetDilute = mix(1.0, 0.97, wetness * density);  // less wet dilution → colour holds
   kmResult *= wetDilute;
+
+  // (edge darkening and multiply blend removed — were causing dull dark colours)
 
   // ── Water film shimmer — faint cool reflection on wet areas ───────────────
   vec3 waterTint = vec3(0.008, 0.013, 0.020) * wetness;
   kmResult += waterTint * 0.12;
 
-  // ── Final blend: painted vs unpainted — border blur controlled by slider ──
-  float blurHigh = 0.012 + u_borderBlur * 0.10;  // 0=sharp(0.012), 1=soft(0.112)
-  float kmBlend  = smoothstep(0.001, blurHigh, density);
+  // ── Final blend: 100% interior opacity, 30% transparent edges ────────────
+  // Paint interior is fully opaque (100%). Edge zone (density < 0.25) fades
+  // to a max of 70% — giving soft, organic watercolour edge feathering.
+  float blurHigh = 0.018 + u_borderBlur * 0.12;  // 0=sharp(0.018), 1=soft(0.138)
+  // Use blurred density for the edge blend — eliminates pixelated step artefacts.
+  // Interior colour/KM still uses the exact centre `density` for accuracy.
+  float rawBlend  = smoothstep(0.001, blurHigh, densitySmooth);
+  // Ramp from 70% at the edge to 100% at density=0.25 (interior body)
+  float edgeFade  = mix(0.70, 1.0, smoothstep(blurHigh * 2.0, 0.28, densitySmooth));
+  float kmBlend   = rawBlend * edgeFade;
   vec3 result = mix(canvas, kmResult, kmBlend);
 
-  // Paper grain subtly visible even through paint (cold-press texture feel)
+  // Paper grain clearly visible through paint — cold-press texture character
+  // Higher coefficients → grain remains legible even at medium-to-high densities.
   float midDensity = kmBlend * (1.0 - kmBlend) * 2.0;
-  result = mix(result, result * (0.92 + paperGrain * 0.10), midDensity * 0.40);
+  result = mix(result, result * (0.88 + paperGrain * 0.26), midDensity * 0.80);
+
+  // ── Paper tooth — tiny dark speckle dots ──────────────────────────────────
+  //
+  // Direct port of the Processing setup() technique:
+  //   for (int i = 0; i < 50000; i++) {
+  //     stroke(0, 0, 0, random(5, 15));
+  //     point(random(width), random(height));  // width = height = 400
+  //   }
+  //
+  // 50 000 dots on 400×400 = 0.3125 dots/px → ~31.25% of cells are dotted.
+  // Each dot darkens by opacity 5–15 / 255 ≈ 0.020–0.059 (2–6% black).
+  // Using floor(vUv * 400) maps one UV cell to one "Processing pixel".
+  // Both paper and painted areas receive the tooth — it's a surface property.
+  vec2  toothCell  = floor(vUv * 400.0);
+  float toothHash  = _hash1(toothCell.x * 73.1  + toothCell.y * 37.7);
+  float hasDot     = step(0.6875, toothHash);          // 31.25% density
+  float dotOpacity = mix(0.020, 0.059,                 // stroke(0,0,0, 5–15)
+    _hash1(toothCell.x * 19.3 + toothCell.y * 83.1));
+  result = mix(result, vec3(0.0), hasDot * dotOpacity);
 
   gl_FragColor = vec4(clamp(result, vec3(0.0), vec3(1.0)), 1.0);
 }

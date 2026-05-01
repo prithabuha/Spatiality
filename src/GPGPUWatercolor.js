@@ -24,8 +24,10 @@ import * as THREE from 'three';
 import passthroughVert from './shaders/passthrough.vert.glsl?raw';
 import velFrag         from './shaders/gpgpu_velocity.frag.glsl?raw';
 import pigFrag         from './shaders/gpgpu_pigment.frag.glsl?raw';
+import bakeFrag        from './shaders/gpgpu_bake.frag.glsl?raw';
+import compositeFrag   from './shaders/gpgpu_composite.frag.glsl?raw';
 
-const DEFAULT_SIM_RES = 512;
+const DEFAULT_SIM_RES = 1024;
 
 export class GPGPUWatercolor {
   constructor(renderer, opts = {}) {
@@ -57,6 +59,9 @@ export class GPGPUWatercolor {
              new THREE.WebGLRenderTarget(simRes, simRes, rtBase)];
     this._velIdx = 0;
     this._pigIdx = 0;
+    // Queue of brush positions collected during a frame; processed as sub-steps
+    // in update() so every interpolated stamp gets its own GPU render pair.
+    this._pendingStrokes = [];
 
     // Static substrate texture (CPU-generated paper grain)
     this.substrateRT = this._buildSubstrate(simRes >= 512 ? 256 : 192, texType, rtBase);
@@ -115,7 +120,7 @@ export class GPGPUWatercolor {
       u_brushRadius:{ value: 0.04 },
       u_pigmentLoad:{ value: 0.60 },
       u_waterAmount:{ value: 0.25 },
-      u_colorMix:   { value: 0.30 },
+      u_colorMix:   { value: 0.55 },
       u_edgeStrength:{ value: 1.0 },
       u_granulationStrength:{ value: 1.0 },
       u_backrunStrength:{ value: 1.0 },
@@ -150,7 +155,44 @@ export class GPGPUWatercolor {
     this._pigScene = new THREE.Scene();
     this._pigScene.add(new THREE.Mesh(geo, pigMat));
 
-    this.outputTexture    = this.pigRT[0].texture;
+    // ── Permanent baked-layer render target ──────────────────────────────────
+    // Stores the colour at peak density, logged the instant paint is applied
+    // and again when it fully dries.  Physics on the wet layer (diffusion,
+    // granulation, retention decay) can never reduce the logged colour.
+    this.bakedRT = new THREE.WebGLRenderTarget(simRes, simRes, rtBase);
+
+    // ── Bake pass: max-density high-water-mark ───────────────────────────────
+    // The new bake shader only needs tWet + tBaked — no dryTimer or painting flag.
+    this._bakeUniforms = {
+      tWet:         { value: this.pigRT[0].texture },
+      tBaked:       { value: this.bakedRT.texture },
+      u_resolution: { value: new THREE.Vector2(simRes, simRes) },
+    };
+    const bakeMat = new THREE.RawShaderMaterial({
+      vertexShader: passthroughVert, fragmentShader: bakeFrag,
+      uniforms: this._bakeUniforms,
+    });
+    this._bakeScene = new THREE.Scene();
+    this._bakeScene.add(new THREE.Mesh(geo, bakeMat));
+
+    // Temp RT for ping-ponging the bake pass (write to temp, then swap → bakedRT)
+    this._bakedTempRT = new THREE.WebGLRenderTarget(simRes, simRes, rtBase);
+
+    // ── Composite pass: merge wet + baked → final output ────────────────────
+    this._compositeRT = new THREE.WebGLRenderTarget(simRes, simRes, rtBase);
+    this._compositeUniforms = {
+      tWet:         { value: this.pigRT[0].texture },
+      tBaked:       { value: this.bakedRT.texture },
+      u_resolution: { value: new THREE.Vector2(simRes, simRes) },
+    };
+    const compositeMat = new THREE.RawShaderMaterial({
+      vertexShader: passthroughVert, fragmentShader: compositeFrag,
+      uniforms: this._compositeUniforms,
+    });
+    this._compositeScene = new THREE.Scene();
+    this._compositeScene.add(new THREE.Mesh(geo, compositeMat));
+
+    this.outputTexture    = this._compositeRT.texture;  // Scene reads this
     this.velOutputTexture = this.velRT[0].texture;
 
     // Expose a flat uniform bag for compatibility with main.js
@@ -184,6 +226,9 @@ export class GPGPUWatercolor {
     // Substrate texel size (for bump normal computation in surface shader)
     const subRes = simRes >= 512 ? 256 : 192;
     this.substrateTexelSize = new THREE.Vector2(1.0 / subRes, 1.0 / subRes);
+
+    // Paint texel size (for anti-aliased edge blending in surface shader)
+    this.paintTexelSize = new THREE.Vector2(1.0 / simRes, 1.0 / simRes);
   }
 
   // ── CPU-side Worley cell-noise substrate (upgraded paper grain) ─────────────
@@ -277,6 +322,64 @@ export class GPGPUWatercolor {
     return { texture: tex };
   }
 
+  // ── Bake + Composite: run after all sub-steps for this frame ───────────────
+  // Bake pass  : updates the permanent bakedRT layer.
+  // Composite  : merges wet + baked into outputTexture (what Scene reads).
+  _runBakeAndComposite(painting) {
+    const pigCurrent = this.pigRT[this._pigIdx];
+    const velCurrent = this.velRT[this._velIdx];
+
+    // ── Bake pass: max(wet, baked) → _bakedTempRT ──────────────────────────
+    this._bakeUniforms.tWet.value   = pigCurrent.texture;
+    this._bakeUniforms.tBaked.value = this.bakedRT.texture;  // previous frame
+    this.renderer.setRenderTarget(this._bakedTempRT);
+    this.renderer.render(this._bakeScene, this._camera);
+
+    // Swap so bakedRT now holds the freshly-rendered bake result.
+    // _bakedTempRT is the old bakedRT and will be overwritten next frame.
+    const _swapBaked = this.bakedRT;
+    this.bakedRT      = this._bakedTempRT;
+    this._bakedTempRT = _swapBaked;
+
+    // ── Composite pass: merge wet + baked → final display texture ──────────
+    this._compositeUniforms.tWet.value   = pigCurrent.texture;
+    this._compositeUniforms.tBaked.value = this.bakedRT.texture;
+    this.renderer.setRenderTarget(this._compositeRT);
+    this.renderer.render(this._compositeScene, this._camera);
+
+    this.renderer.setRenderTarget(null);
+    this.outputTexture    = this._compositeRT.texture;
+    this.velOutputTexture = velCurrent.texture;
+  }
+
+  // ── Internal: execute one vel+pig render pair ──────────────────────────────
+  // Called once per sub-step inside update().  Handles ping-pong internally.
+  _runPasses(dt, painting) {
+    const vRead  = this._velIdx;
+    const vWrite = 1 - this._velIdx;
+    this.velUniforms.tVelocity.value  = this.velRT[vRead].texture;
+    this.velUniforms.u_dt.value       = dt;
+    this.velUniforms.u_painting.value = painting;
+    this.renderer.setRenderTarget(this.velRT[vWrite]);
+    this.renderer.render(this._velScene, this._camera);
+    this._velIdx = vWrite;
+
+    const pRead  = this._pigIdx;
+    const pWrite = 1 - this._pigIdx;
+    this.pigUniforms.tPigment.value   = this.pigRT[pRead].texture;
+    this.pigUniforms.tVelocity.value  = this.velRT[vWrite].texture;
+    this.pigUniforms.u_dt.value       = dt;
+    this.pigUniforms.u_painting.value = painting;
+    this.renderer.setRenderTarget(this.pigRT[pWrite]);
+    this.renderer.render(this._pigScene, this._camera);
+    this._pigIdx = pWrite;
+
+    this.renderer.setRenderTarget(null);
+    // NOTE: outputTexture is set by _runBakeAndComposite() each frame.
+    // Here we just update velOutputTexture for Scene's water-depth overlay.
+    this.velOutputTexture = this.velRT[this._velIdx].texture;
+  }
+
   // ── Notify the engine that a brush stroke just occurred ────────────────────
   // Call this each frame that gpgpu.paint() is called.
   // Resets the CPU-side global drying clock so u_isDrying / u_dryProgress
@@ -319,12 +422,9 @@ export class GPGPUWatercolor {
     this.pigUniforms.u_brushRadius.value = this.uniforms.u_brushSize.value;
     this.pigUniforms.u_time.value        = time;
 
-    // ── Sync stochastic splat seed (deterministic per frame) ───────────────
-    // Same seed in both passes → water and pigment deposits are co-located.
+    // ── Splat seed base (varied per-stamp in the render loop below) ───────────
     const splatSeed = (this._totalTime * 7.31) % 1000.0;
-    this.velUniforms.u_splatSeed.value = splatSeed;
-    this.pigUniforms.u_splatSeed.value = splatSeed;
-    // Sync splatSpread from uniforms bag
+    // Sync splatSpread (shared across all stamps in a frame)
     this.velUniforms.u_splatSpread.value = this.uniforms.u_splatSpread.value;
     this.pigUniforms.u_splatSpread.value = this.uniforms.u_splatSpread.value;
 
@@ -340,44 +440,49 @@ export class GPGPUWatercolor {
       }
     }
 
-    // ── Pass 1: Velocity ───────────────────────────────────────────────────
-    const vRead  = this._velIdx;
-    const vWrite = 1 - this._velIdx;
-    this.velUniforms.tVelocity.value = this.velRT[vRead].texture;
-    this.velUniforms.u_dt.value      = clampedDt;
-    this.velUniforms.u_painting.value = this.uniforms.u_painting.value;
+    // ── Sub-step rendering: one GPU pair per queued brush position ────────────
+    // Each paint() call queued a position.  We now render them in order so
+    // every interpolated stamp actually hits the GPU — fixing gaps at high speed.
+    // dt is split evenly so the total physics effect per frame stays correct.
+    const strokes           = this._pendingStrokes;
+    const paintingThisFrame = strokes.length > 0 ? 1.0 : 0.0;
 
-    this.renderer.setRenderTarget(this.velRT[vWrite]);
-    this.renderer.render(this._velScene, this._camera);
-    this._velIdx = vWrite;
+    if (strokes.length === 0) {
+      // No painting this frame: one physics-only pass (drying / gravity / etc.)
+      this.velUniforms.u_splatSeed.value = splatSeed;
+      this.pigUniforms.u_splatSeed.value = splatSeed;
+      this._runPasses(clampedDt, 0.0);
+    } else {
+      const subDt = clampedDt / strokes.length;
+      for (let i = 0; i < strokes.length; i++) {
+        const { u, v } = strokes[i];
+        this.velUniforms.u_brushUV.value.set(u, v);
+        this.pigUniforms.u_brushUV.value.set(u, v);
+        // Vary splat seed per stamp → unique stochastic splat patterns per step
+        const stepSeed = (splatSeed + i * 13.73) % 1000.0;
+        this.velUniforms.u_splatSeed.value = stepSeed;
+        this.pigUniforms.u_splatSeed.value = stepSeed;
+        this._runPasses(subDt, 1.0);
+      }
+      this._pendingStrokes = [];
+    }
 
-    // ── Pass 2: Pigment ────────────────────────────────────────────────────
-    const pRead  = this._pigIdx;
-    const pWrite = 1 - this._pigIdx;
-    this.pigUniforms.tPigment.value  = this.pigRT[pRead].texture;
-    this.pigUniforms.tVelocity.value = this.velRT[vWrite].texture;
-    this.pigUniforms.u_dt.value      = clampedDt;
-    this.pigUniforms.u_painting.value = this.uniforms.u_painting.value;
-
-    this.renderer.setRenderTarget(this.pigRT[pWrite]);
-    this.renderer.render(this._pigScene, this._camera);
-    this._pigIdx = pWrite;
-
-    this.renderer.setRenderTarget(null);
-    this.outputTexture    = this.pigRT[this._pigIdx].texture;
-    this.velOutputTexture = this.velRT[this._velIdx].texture;
+    // ── Bake + Composite (once per frame, after all sub-steps) ───────────────
+    this._runBakeAndComposite(paintingThisFrame);
 
     // Reset paint flag
-    this.uniforms.u_painting.value = 0.0;
+    this.uniforms.u_painting.value    = 0.0;
     this.velUniforms.u_painting.value = 0.0;
     this.pigUniforms.u_painting.value = 0.0;
   }
 
   // ── Stamp a brush at surface UV (u, v) ─────────────────────────────────────
+  // Shared options (color, size, water, …) are applied immediately to the
+  // uniforms.  The position (u, v) is queued; update() will sub-step through
+  // all queued positions, giving each its own GPU render pair so no stamp
+  // is ever skipped — even at full-speed fast swipes.
   paint(u, v, options = {}) {
-    this.velUniforms.u_brushUV.value.set(u, v);
-    this.pigUniforms.u_brushUV.value.set(u, v);
-
+    // Set shared (non-position) uniforms — same for all stamps in a stroke.
     if (options.color) {
       this.pigUniforms.u_color.value.set(options.color.r, options.color.g, options.color.b);
     }
@@ -398,6 +503,9 @@ export class GPGPUWatercolor {
     if (options.waterAmount  !== undefined) this.pigUniforms.u_waterAmount.value= options.waterAmount;
 
     this.uniforms.u_painting.value = 1.0;
+
+    // Queue this position — update() will render a GPU pass for each entry.
+    this._pendingStrokes.push({ u, v });
   }
 
   // ── Trigger expanding ripple (wave-clear animation) ────────────────────────
@@ -418,7 +526,10 @@ export class GPGPUWatercolor {
     this.renderer.getClearColor(savedColor);
     this.renderer.setClearColor(0x000000, 0);
 
-    for (const rt of [...this.velRT, ...this.pigRT]) {
+    for (const rt of [
+      ...this.velRT, ...this.pigRT,
+      this.bakedRT, this._bakedTempRT, this._compositeRT,
+    ]) {
       this.renderer.setRenderTarget(rt);
       this.renderer.clear(true, false, false);
     }
@@ -434,6 +545,8 @@ export class GPGPUWatercolor {
   }
 
   dispose() {
-    [...this.velRT, ...this.pigRT].forEach(rt => rt.dispose());
+    [...this.velRT, ...this.pigRT,
+      this.bakedRT, this._bakedTempRT, this._compositeRT,
+    ].forEach(rt => rt.dispose());
   }
 }

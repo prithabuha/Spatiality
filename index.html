@@ -3,28 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Spatiality</title>
+  <title>Spatiality — AR Wall</title>
 
-  <!-- Fredoka One — chunky display for logo · Quicksand — UI controls -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  <!-- TactileTheme — full neumorphic paper design system -->
+  <!-- TactileTheme keeps the paper-grain overlay and neumorphic tokens -->
   <link rel="stylesheet" href="/src/TactileTheme.css">
 
   <style>
-    /* ── Layout-only styles (not theme) ─────────────────────────────────── */
-    /* These purely define structure / z-index — all visual styling is      */
-    /* in TactileTheme.css so the theme can be swapped without touching HTML */
-
+    /* ── Core layout ─────────────────────────────────────────────────────── */
     #app {
       width: 100vw;
       height: 100vh;
       position: relative;
+      overflow: hidden;
     }
 
-    /* Three.js canvas lives at z-index 1 — below grain (2) and all panels  */
     #three-canvas {
       position: absolute;
       inset: 0;
@@ -33,7 +29,6 @@
       z-index: 1;
     }
 
-    /* Hand skeleton overlay — above canvas, pointer-events off              */
     #hand-overlay {
       position: absolute;
       inset: 0;
@@ -43,170 +38,211 @@
       pointer-events: none;
     }
 
-    /* Legacy finger cursor — hidden; WaterCursor owns the visual             */
     #finger-cursor { display: none !important; }
+
+    /* ── Webcam mini preview ─────────────────────────────────────────────── */
+    /* TactileTheme.css styles this — nothing extra needed here */
+
+    /* ── Hint chip ───────────────────────────────────────────────────────── */
+    /* Position override: sits at the very bottom of the AR wall */
+    #hint-chip {
+      bottom: 32px !important;
+    }
+
+    /* ── AR Welcome overlay ──────────────────────────────────────────────── */
+    .ar-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(251, 255, 250, 0.88);
+      backdrop-filter: blur(3px);
+      transition: opacity 0.7s ease;
+    }
+    .ar-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .ar-inner {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .ar-title {
+      font-family: 'Fredoka One', cursive;
+      font-size: clamp(72px, 13vw, 140px);
+      line-height: 1;
+      letter-spacing: 4px;
+      filter: drop-shadow(0 4px 20px rgba(0,0,0,0.10));
+    }
+    .ar-title .c1 { color: #E02A3A; }
+    .ar-title .c2 { color: #1848C8; }
+    .ar-title .c3 { color: #E09A00; }
+    .ar-title .c4 { color: #12966A; }
+
+    .ar-subtitle {
+      font-family: 'Quicksand', sans-serif;
+      font-size: clamp(20px, 3.2vw, 34px);
+      font-weight: 600;
+      color: #5a5450;
+    }
+
+    .ar-cta {
+      font-family: 'Quicksand', sans-serif;
+      font-size: clamp(13px, 1.8vw, 19px);
+      color: #a09890;
+      margin-top: 6px;
+    }
+
+    .ar-end-msg {
+      font-family: 'Fredoka One', cursive;
+      font-size: clamp(40px, 7vw, 80px);
+      color: #12966A;
+    }
+
+    /* ── Camera permission gate ──────────────────────────────────────────── */
+    #camera-gate {
+      z-index: 200;   /* sits above every other overlay */
+      background: rgba(248, 245, 240, 0.97);
+      backdrop-filter: blur(6px);
+    }
+    #camera-gate .gate-icon {
+      font-size: clamp(64px, 10vw, 108px);
+      line-height: 1;
+    }
+    #camera-gate h2 {
+      font-family: 'Fredoka One', cursive;
+      font-size: clamp(28px, 5vw, 54px);
+      color: #3a3530;
+      margin: 0;
+    }
+    #camera-gate p {
+      font-family: 'Quicksand', sans-serif;
+      font-size: clamp(14px, 2.2vw, 22px);
+      font-weight: 600;
+      color: #7a746e;
+      margin: 0;
+      text-align: center;
+      line-height: 1.55;
+    }
+    #btn-allow-camera {
+      font-family: 'Fredoka One', cursive;
+      font-size: clamp(18px, 3vw, 32px);
+      color: #fff;
+      background: #12966A;
+      border: none;
+      border-radius: 999px;
+      padding: clamp(12px, 1.8vw, 22px) clamp(32px, 5vw, 72px);
+      cursor: pointer;
+      box-shadow: 0 8px 28px rgba(18,150,106,0.38);
+      transition: transform 0.1s, box-shadow 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #btn-allow-camera:active  { transform: scale(0.96); }
+    #btn-allow-camera:disabled { opacity: 0.55; cursor: default; }
+    #camera-gate-status {
+      font-family: 'Quicksand', sans-serif;
+      font-size: clamp(12px, 1.8vw, 17px);
+      font-weight: 600;
+      color: #E02A3A;
+      min-height: 1.4em;
+      text-align: center;
+    }
+    #camera-gate-status.ok { color: #12966A; }
+
+    /* ── Dev Controls toggle — bottom-right corner ───────────────────────── */
+    #god-mode-toggle {
+      position: fixed;
+      bottom: 14px;
+      right: 14px;
+      width: 42px;
+      height: 42px;
+      opacity: 0.55;
+      pointer-events: all;
+      z-index: 50;
+      background: rgba(253, 251, 248, 0.92);
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      line-height: 1;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.07);
+      transition: opacity 0.15s ease, box-shadow 0.15s ease;
+    }
+    #god-mode-toggle:hover {
+      opacity: 1.0;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.16), 0 1px 5px rgba(0,0,0,0.10);
+    }
   </style>
 </head>
 <body>
 <div id="app">
+
+  <!-- Three.js render target -->
   <canvas id="three-canvas"></canvas>
+
+  <!-- Hand skeleton overlay -->
   <canvas id="hand-overlay"></canvas>
+
+  <!-- Legacy cursor shim (hidden) -->
   <div id="finger-cursor"></div>
 
-  <!-- Webcam mini preview (bottom-right) -->
+  <!-- Webcam mini preview -->
   <div id="webcam-mini">
     <video id="webcam-bg" autoplay playsinline muted></video>
   </div>
 
-  <!-- ── Spatiality Logo ─────────────────────────────────────────────────── -->
-  <!--
-    Style ref: "The Little Brush" children's art studio logo.
-      • Fredoka One — chunky, rounded, playful display letterforms
-      • 4-colour letter rotation: crimson · cobalt · amber · teal
-      • Vertical paintbrush left of wordmark (handle gradient = letter colours)
-      • Bristle tip teal-paint blob with live drip-pulse CSS animation
-      • Whole brush sways gently on a 7-second ease-in-out cycle
-  -->
-  <svg id="spatiality-logo"
-       viewBox="0 0 218 54"
-       xmlns="http://www.w3.org/2000/svg"
-       width="200" height="50"
-       aria-label="Spatiality">
-    <defs>
-      <!-- Brush handle gradient — cycles through the four letter colours -->
-      <linearGradient id="sp-hg" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%"   stop-color="#E02A3A"/>
-        <stop offset="32%"  stop-color="#1848C8"/>
-        <stop offset="65%"  stop-color="#E09A00"/>
-        <stop offset="100%" stop-color="#12966A"/>
-      </linearGradient>
-      <!-- Drop shadow for the brush mark -->
-      <filter id="sp-sh" x="-12%" y="-8%" width="124%" height="120%">
-        <feDropShadow dx="0.5" dy="1.5" stdDeviation="1.2"
-                      flood-color="rgba(0,0,0,0.18)"/>
-      </filter>
-    </defs>
-
-    <!-- ── Paintbrush ──────────────────────────────────────────────────── -->
-    <g id="sp-brush" filter="url(#sp-sh)">
-      <!-- Handle: multi-colour rounded rod -->
-      <rect x="9" y="1" width="9" height="26" rx="4.5" fill="url(#sp-hg)"/>
-      <!-- Specular stripe on handle (wet gloss) -->
-      <rect x="10.5" y="2.5" width="2.5" height="20" rx="1.25"
-            fill="rgba(255,255,255,0.34)"/>
-      <!-- Ferrule: silver band -->
-      <rect x="8" y="25" width="11" height="6" rx="2.2" fill="#9CA4B8"/>
-      <rect x="9" y="25.5" width="9" height="2.5" rx="1"
-            fill="rgba(255,255,255,0.38)"/>
-      <!-- Bristle mass: teardrop-tapered shape -->
-      <path d="M8,31 C7.5,35 8.5,42 13.5,48 C18.5,42 19.5,35 19,31 Z"
-            fill="#2A1E30"/>
-      <!-- Inner bristle sheen -->
-      <path d="M10.5,32 C10,36 11,42 13.5,47 C12,42 11.5,36 11,32 Z"
-            fill="rgba(255,255,255,0.10)"/>
-      <!-- Paint blob at tip (id for animation) -->
-      <ellipse id="sp-paint" cx="13.5" cy="49" rx="5" ry="3" fill="#12966A"/>
-      <ellipse cx="11.8" cy="47.8" rx="1.8" ry="1.0"
-               fill="rgba(255,255,255,0.55)"/>
-      <!-- Micro drip below tip -->
-      <ellipse id="sp-drip" cx="13.5" cy="52.5" rx="2" ry="1.4"
-               fill="#12966A" opacity="0.55"/>
-    </g>
-
-    <!-- ── Wordmark — Fredoka One, per-letter 4-colour rotation ──────── -->
-    <!--
-      S=crimson  p=cobalt  a=amber  t=teal
-      i=crimson  a=cobalt  l=amber  i=teal  t=crimson  y=cobalt
-    -->
-    <text x="32" y="38"
-          font-family="'Fredoka One', 'Quicksand', cursive"
-          font-size="28" letter-spacing="0.8">
-      <tspan fill="#E02A3A">S</tspan><tspan fill="#1848C8">p</tspan><tspan fill="#E09A00">a</tspan><tspan fill="#12966A">t</tspan><tspan fill="#E02A3A">i</tspan><tspan fill="#1848C8">a</tspan><tspan fill="#E09A00">l</tspan><tspan fill="#12966A">i</tspan><tspan fill="#E02A3A">t</tspan><tspan fill="#1848C8">y</tspan>
-    </text>
-  </svg>
-
-  <!-- ── Brush Lab ─────────────────────────────────────────────────────── -->
-  <button id="brush-lab-toggle" type="button">Brush Lab</button>
-  <aside id="brush-lab" class="is-collapsed" aria-label="Brush controls">
-    <div class="lab-head">
-      <strong>Watercolor Studio</strong>
-      <span id="brush-profile-label">Balanced</span>
+  <!-- ── Camera permission gate — shown first, dismissed once camera is live ─ -->
+  <div id="camera-gate" class="ar-overlay">
+    <div class="ar-inner" style="gap:28px">
+      <div class="gate-icon">📷</div>
+      <h2>Camera Access Needed</h2>
+      <p>Hand tracking needs your webcam<br>to follow your brush gestures</p>
+      <button id="btn-allow-camera">Allow Camera →</button>
+      <p id="camera-gate-status"></p>
     </div>
+  </div>
 
-    <label class="lab-row" for="brush-preset">
-      <span>Preset</span>
-      <select id="brush-preset">
-        <option value="fresco">Fresco Detail</option>
-        <option value="rebelle">Rebelle Inspired</option>
-        <option value="wash">Soft Wash</option>
-        <option value="dry">Dry Texture</option>
-        <option value="splash">Wet Splatter</option>
-      </select>
-      <span class="lab-value"></span>
-    </label>
+  <!-- ── Welcome overlay — displayed until kiosk sends 'start' ─────────── -->
+  <div id="ar-welcome" class="ar-overlay hidden" style="display:none">
+    <div class="ar-inner">
+      <h1 class="ar-title">
+        <span class="c1">S</span><span class="c2">p</span><span class="c3">a</span><span class="c4">t</span><span class="c1">i</span><span class="c2">a</span><span class="c3">l</span><span class="c4">i</span><span class="c1">t</span><span class="c2">y</span>
+      </h1>
+      <p class="ar-subtitle">The World is Your Canvas</p>
+      <p class="ar-cta">Press <strong>Let's Start!</strong> on the kiosk to begin ✦</p>
+    </div>
+  </div>
 
-    <label class="lab-row" for="brush-color">
-      <span>Color</span>
-      <input id="brush-color" type="color" value="#d93060" />
-      <span class="lab-value"></span>
-    </label>
+  <!-- ── End overlay — shown when kiosk sends 'end' ────────────────────── -->
+  <div id="ar-end" class="ar-overlay hidden" style="display:none">
+    <div class="ar-inner">
+      <p class="ar-end-msg">🎉 What a masterpiece!</p>
+      <p class="ar-subtitle">Scan the QR code on the kiosk to save your artwork</p>
+    </div>
+  </div>
 
-    <label class="lab-row" for="brush-size">
-      <span>Size</span>
-      <input id="brush-size" type="range" min="0.016" max="0.09" step="0.001" value="0.034" />
-      <span id="brush-size-value" class="lab-value">0.034</span>
-    </label>
+  <!-- Gesture hint chip -->
+  <div id="hint-chip">☝️  Point to paint  ·  👍  Hold 3 s to clear ✦</div>
 
-    <label class="lab-row" for="brush-water">
-      <span>Water</span>
-      <input id="brush-water" type="range" min="0.08" max="0.90" step="0.01" value="0.42" />
-      <span id="brush-water-value" class="lab-value">0.42</span>
-    </label>
-
-    <label class="lab-row" for="brush-pigment">
-      <span>Pigment</span>
-      <input id="brush-pigment" type="range" min="0.10" max="0.90" step="0.01" value="0.34" />
-      <span id="brush-pigment-value" class="lab-value">0.34</span>
-    </label>
-
-    <label class="lab-row" for="brush-mix">
-      <span>Mixing</span>
-      <input id="brush-mix" type="range" min="0.00" max="0.85" step="0.01" value="0.30" />
-      <span id="brush-mix-value" class="lab-value">0.30</span>
-    </label>
-
-    <label class="lab-row" for="brush-smoothing">
-      <span>Smoothing</span>
-      <input id="brush-smoothing" type="range" min="0.00" max="0.85" step="0.01" value="0.25" />
-      <span id="brush-smoothing-value" class="lab-value">0.25</span>
-    </label>
-  </aside>
-
-  <!-- Hint chip (above palette) -->
-  <div id="hint-chip">Point finger to paint · Wave both hands to clear ✦</div>
-
-  <!-- ── God Mode ──────────────────────────────────────────────────────── -->
-  <!-- God Mode: minimal icon button, very bottom-right. G key also works. -->
-  <button id="god-mode-toggle" type="button" title="Dev Controls  (G key)">
-    <svg viewBox="0 0 18 14" width="18" height="14" fill="none"
-         xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <line x1="1" y1="2"  x2="17" y2="2"  stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="13" cy="2"  r="2.4" fill="currentColor"/>
-      <line x1="1" y1="7"  x2="17" y2="7"  stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="6"  cy="7"  r="2.4" fill="currentColor"/>
-      <line x1="1" y1="12" x2="17" y2="12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="12" cy="12" r="2.4" fill="currentColor"/>
-    </svg>
-  </button>
+  <!-- ── God Mode — invisible trigger, G key or tiny bottom-right click ── -->
+  <button id="god-mode-toggle" type="button" title="Dev Controls (press G)">⚙️</button>
 
   <aside id="god-mode" class="is-collapsed" aria-label="Dev Controls">
-
     <div class="god-head">
       <strong>Dev Controls</strong>
       <span>SIMULATION OVERRIDES</span>
     </div>
 
-    <!-- BRUSH -->
     <div class="god-section-label">Brush</div>
 
     <label class="god-row">
@@ -216,7 +252,6 @@
         <option value="1">— Dry Brush</option>
         <option value="2">· Splatter</option>
       </select>
-      <span class="god-value"></span>
     </label>
 
     <label class="god-row">
@@ -237,7 +272,6 @@
       <span class="god-value" id="gv-splat">0.55</span>
     </label>
 
-    <!-- WATER / FLOW -->
     <div class="god-section">
       <div class="god-section-label">Water &amp; Flow</div>
 
@@ -266,7 +300,6 @@
       </label>
     </div>
 
-    <!-- DRYING -->
     <div class="god-section">
       <div class="god-section-label">Drying &amp; Texture</div>
 
@@ -309,8 +342,8 @@
 
     <button class="god-reset-btn" id="gm-reset">↺ Reset to Defaults</button>
   </aside>
-</div>
 
+</div>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>

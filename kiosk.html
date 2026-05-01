@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Spatiality · Kiosk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/kiosk.css">
+</head>
+<body>
+<div id="kiosk-root">
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 1 — WELCOME
+═══════════════════════════════════════════ -->
+<div id="screen-welcome" class="screen active">
+  <div class="wlc-bubbles" aria-hidden="true">
+    <span class="wb wb1"></span><span class="wb wb2"></span>
+    <span class="wb wb3"></span><span class="wb wb4"></span>
+  </div>
+  <div class="wlc-body">
+    <h1 class="wlc-title">
+      <span style="color:#E02A3A">S</span><span style="color:#1848C8">p</span><span
+        style="color:#E09A00">a</span><span style="color:#12966A">t</span><span
+        style="color:#E02A3A">i</span><span style="color:#1848C8">a</span><span
+        style="color:#E09A00">l</span><span style="color:#12966A">i</span><span
+        style="color:#E02A3A">t</span><span style="color:#1848C8">y</span>
+    </h1>
+    <p class="wlc-sub">The World is Your Canvas</p>
+  </div>
+  <button id="btn-start" class="btn-start">Let's Start!</button>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 2 — CONTROLS
+     1920 × 1080  →  topbar 80px + stage 1000px
+     columns: 360 + 600 + 480 + 480 = 1920px
+     color col is wider — it is the primary control
+═══════════════════════════════════════════ -->
+<div id="screen-controls" class="screen">
+
+  <div class="ctrl-topbar">
+    <span class="topbar-logo">✦ Spatiality</span>
+    <span class="topbar-hint">☝️ Point to paint &nbsp;·&nbsp; 👍 3 s to clear</span>
+    <button id="btn-done" class="btn-done">Done →</button>
+  </div>
+
+  <div class="ctrl-stage">
+
+    <!-- ── COL 1 : WATER (360 px) ────────────────────────────── -->
+    <div class="ctrl-col ctrl-col-water">
+      <div class="col-header">
+        <span class="col-label">Water</span>
+        <span class="col-hint">drag up · down</span>
+      </div>
+      <div class="ctrl-body">
+      <div class="water-track">
+        <span class="water-ext">Wet</span>
+        <div class="water-capsule" id="water-capsule">
+          <div class="water-fill" id="water-fill"></div>
+          <div class="water-drop" id="water-drop">
+            <svg width="52" height="64" viewBox="0 0 56 68" fill="none">
+              <path d="M28 4 C28 4 5 26 5 42 A23 23 0 0 0 51 42 C51 26 28 4 28 4Z"
+                    stroke="#1a7fe8" stroke-width="3" fill="white"/>
+              <path d="M28 4 C28 4 5 26 5 42 A23 23 0 0 0 51 42 C51 26 28 4 28 4Z"
+                    fill="#1a7fe8" opacity="0.22"/>
+            </svg>
+          </div>
+        </div>
+        <span class="water-ext">Dry</span>
+      </div>
+      </div><!-- /ctrl-body -->
+    </div>
+
+    <!-- ── COL 2 : COLOR WHEEL (600 px — primary) ───────────── -->
+    <div class="ctrl-col ctrl-col-center">
+      <!-- ambient glow behind wheel tracks --active-color via @property -->
+      <div class="col-glow" aria-hidden="true"></div>
+
+      <div class="col-header">
+        <span class="col-label">Color</span>
+        <span class="col-hint">tap to pick</span>
+      </div>
+      <div class="ctrl-body ctrl-body-col">
+        <div class="wheel-wrap">
+          <div class="wheel-nm">
+            <canvas id="color-wheel" width="460" height="460"></canvas>
+          </div>
+          <div id="color-center" class="color-center"></div>
+        </div>
+        <span id="color-name" class="color-name">Rose</span>
+      </div><!-- /ctrl-body -->
+    </div>
+
+    <!-- ── COL 3 : BRUSH TYPE (480 px) ──────────────────────── -->
+    <div class="ctrl-col">
+      <div class="col-header">
+        <span class="col-label">Brush Type</span>
+        <span class="col-hint">choose your stroke</span>
+      </div>
+      <div class="ctrl-body">
+      <div class="type-stack" id="type-stack">
+
+        <!-- WET — viewBox padded ±20 h / ±14 v so stroke-width never bleeds past SVG bounds -->
+        <button class="type-card active" data-type="0" data-preset="rebelle">
+          <span class="type-name">Wet</span>
+          <svg class="type-svg" viewBox="-20 -14 320 108" preserveAspectRatio="none">
+            <path d="M14,42 C40,16 72,66 112,42 C152,18 184,64 224,42 C252,26 272,46 278,40"
+              stroke="currentColor" stroke-width="20" fill="none"
+              stroke-linecap="round" stroke-linejoin="round" opacity="0.82"/>
+            <path d="M14,42 C40,16 72,66 112,42 C152,18 184,64 224,42 C252,26 272,46 278,40"
+              stroke="#fff" stroke-width="7" fill="none"
+              stroke-linecap="round" opacity="0.18"/>
+            <path d="M14,42 C40,16 72,66 112,42 C152,18 184,64 224,42 C252,26 272,46 278,40"
+              stroke="currentColor" stroke-width="36" fill="none"
+              stroke-linecap="round" opacity="0.07"/>
+          </svg>
+        </button>
+
+        <!-- DRY -->
+        <button class="type-card" data-type="1" data-preset="dry">
+          <span class="type-name">Dry</span>
+          <svg class="type-svg" viewBox="-20 -14 320 108" preserveAspectRatio="none">
+            <path d="M14,42 C48,30 82,54 124,40 C162,28 196,52 238,40 C260,34 273,42 278,40"
+              stroke="currentColor" stroke-width="8" fill="none"
+              stroke-linecap="round" opacity="0.70"/>
+            <path d="M14,38 C48,26 82,50 124,36 C162,24 196,48 238,36"
+              stroke="currentColor" stroke-width="3.5" fill="none"
+              stroke-linecap="round" opacity="0.36"/>
+            <path d="M18,47 C52,38 86,58 128,46 C166,35 200,56 240,46"
+              stroke="currentColor" stroke-width="2" fill="none"
+              stroke-linecap="round" opacity="0.22"/>
+            <circle cx="68"  cy="28" r="2.5" fill="currentColor" opacity="0.30"/>
+            <circle cx="152" cy="56" r="2"   fill="currentColor" opacity="0.26"/>
+            <circle cx="208" cy="27" r="3"   fill="currentColor" opacity="0.22"/>
+          </svg>
+        </button>
+
+        <!-- SPLATTER -->
+        <button class="type-card" data-type="2" data-preset="splash">
+          <span class="type-name">Splatter</span>
+          <svg class="type-svg" viewBox="-20 -14 320 108" preserveAspectRatio="none">
+            <path d="M14,42 C60,34 110,50 168,40 C216,32 256,46 278,40"
+              stroke="currentColor" stroke-width="3" fill="none"
+              stroke-linecap="round" opacity="0.34"/>
+            <circle cx="36"  cy="22" r="7"   fill="currentColor" opacity="0.48"/>
+            <circle cx="72"  cy="58" r="5.5" fill="currentColor" opacity="0.44"/>
+            <circle cx="114" cy="18" r="8.5" fill="currentColor" opacity="0.42"/>
+            <circle cx="152" cy="60" r="6"   fill="currentColor" opacity="0.46"/>
+            <circle cx="192" cy="20" r="5"   fill="currentColor" opacity="0.38"/>
+            <circle cx="228" cy="56" r="7"   fill="currentColor" opacity="0.44"/>
+            <circle cx="262" cy="28" r="4"   fill="currentColor" opacity="0.34"/>
+            <circle cx="55"  cy="48" r="2.5" fill="currentColor" opacity="0.24"/>
+            <circle cx="136" cy="46" r="2"   fill="currentColor" opacity="0.22"/>
+            <circle cx="212" cy="42" r="3"   fill="currentColor" opacity="0.20"/>
+          </svg>
+        </button>
+
+      </div>
+      </div><!-- /ctrl-body -->
+    </div>
+
+    <!-- ── COL 4 : BRUSH SIZE (480 px) ──────────────────────── -->
+    <div class="ctrl-col">
+      <div class="col-header">
+        <span class="col-label">Brush Size</span>
+        <span class="col-hint">pick your mark</span>
+      </div>
+      <div class="ctrl-body">
+      <div class="size-stack" id="size-stack">
+
+        <button class="size-card active" data-size="0.003">
+          <span class="size-name">Fine</span>
+          <span class="size-dot-zone">
+            <span class="size-dot" style="width:5px;height:5px"></span>
+          </span>
+        </button>
+
+        <button class="size-card" data-size="0.008">
+          <span class="size-name">Small</span>
+          <span class="size-dot-zone">
+            <span class="size-dot" style="width:10px;height:10px"></span>
+          </span>
+        </button>
+
+        <button class="size-card" data-size="0.018">
+          <span class="size-name">Medium</span>
+          <span class="size-dot-zone">
+            <span class="size-dot" style="width:20px;height:20px"></span>
+          </span>
+        </button>
+
+        <button class="size-card" data-size="0.040">
+          <span class="size-name">Large</span>
+          <span class="size-dot-zone">
+            <span class="size-dot" style="width:40px;height:40px"></span>
+          </span>
+        </button>
+
+        <button class="size-card" data-size="0.085">
+          <span class="size-name">XL</span>
+          <span class="size-dot-zone">
+            <span class="size-dot" style="width:80px;height:80px"></span>
+          </span>
+        </button>
+
+      </div>
+      </div><!-- /ctrl-body -->
+    </div>
+
+  </div><!-- /ctrl-stage -->
+</div><!-- /screen-controls -->
+
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 3 — END
+═══════════════════════════════════════════ -->
+<div id="screen-end" class="screen">
+  <div id="end-confetti"></div>
+  <div class="end-body">
+
+    <h2 class="end-title">You made something beautiful! 🎉</h2>
+
+    <div class="end-row">
+
+      <!-- ── Gallery frame ──────────────────────────────────────── -->
+      <div class="artwork-frame-wrap">
+        <div class="artwork-frame">
+          <div class="artwork-loading" id="artwork-loading">
+            <span class="artwork-pulse"></span>
+          </div>
+          <img id="artwork-preview" class="artwork-img" src="" alt="Your painting" />
+        </div>
+        <p class="artwork-byline" id="artwork-byline">your masterpiece</p>
+      </div>
+
+      <!-- ── Name input + QR ────────────────────────────────────── -->
+      <div class="end-right">
+        <div class="end-form">
+          <label class="end-name-label" for="artist-name">✍️ Sign your work</label>
+          <input id="artist-name" class="end-name-input" type="text"
+                 placeholder="Your name…" maxlength="30" autocomplete="off" />
+        </div>
+
+        <div class="end-qr">
+          <div id="qr-loading-state" class="qr-inner">
+            <span class="qr-wait-text">Saving your artwork…</span>
+          </div>
+          <div id="qr-ready-state" class="qr-inner" style="display:none">
+            <div class="qr-canvas-wrap">
+              <canvas id="qr-canvas"></canvas>
+            </div>
+            <p class="qr-brand">✦ Spatiality</p>
+            <p class="qr-hint">Scan · save · share</p>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /end-row -->
+
+    <div class="end-btns">
+      <button id="btn-paint-again" class="btn-secondary">🎨 Paint Again</button>
+      <button id="btn-bye" class="btn-primary">All Done · Bye Bye 👋</button>
+    </div>
+
+  </div>
+</div>
+
+</div><!-- /kiosk-root -->
+<script type="module" src="/src/kiosk.js"></script>
+</body>
+</html>

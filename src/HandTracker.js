@@ -1,17 +1,25 @@
 /**
- * HandTracker — Kid-friendly MediaPipe Hand Landmarker
+ * HandTracker — MediaPipe Hand Landmarker  +  optional Face Detector
  *
  * ── Interaction model ─────────────────────────────────────────────────────────
- *   INDEX EXTENDED   → isPainting = true  (no pinch required)
- *   OPEN (hold 1.2s) → single-hand clear
- *   TWO-HAND WAVE    → onClear() triggered (both hands move fast for 0.4 s)
+ *   INDEX HELD 2 s        → isPainting = true
+ *                            (countdown ring shown at finger tip + centered prompt)
+ *   BOTH HANDS 3× WAVE    → onClear()  (same person, 3 swipes within 5 s)
+ *
+ * ── Face detection (non-blocking) ─────────────────────────────────────────────
+ *   FaceDetector runs alongside HandLandmarker.
+ *   Primary face = largest bounding box (closest/most prominent person).
+ *   When multiple faces are visible only hands near the primary face are
+ *   accepted for painting — bystanders cannot accidentally paint.
+ *   The active artist gets a subtle "✦ Artist" label on the overlay.
  *
  * ── Published state ───────────────────────────────────────────────────────────
- *   tracker.indexTip     { x, y }  — normalised screen position (0..1)
- *   tracker.isPainting   boolean   — index finger extended
- *   tracker.isMoving     boolean   — hand velocity above threshold
- *   tracker.brushDepth   number    — 0 (far) → 1 (close to camera)  → brush size
- *   tracker.ready        boolean
+ *   tracker.indexTip           { x, y }  — normalised screen position (0..1)
+ *   tracker.isPainting         boolean   — index held ≥ 2 s
+ *   tracker.paintHoldProgress  0 → 1    — ring fill during 2-second hold
+ *   tracker.isMoving           boolean   — hand velocity above threshold
+ *   tracker.brushDepth         number    — 0 (far) → 1 (close)  → brush size
+ *   tracker.ready              boolean
  *
  * ── Callbacks ─────────────────────────────────────────────────────────────────
  *   tracker.onClear = () => {}
@@ -23,35 +31,48 @@ export class HandTracker {
     this.overlay = overlayCanvasEl;
     this.ctx     = overlayCanvasEl.getContext('2d');
 
-    this.moveThreshold  = opts.moveThreshold ?? 0.006;
-    this._clearDuration = 1.2;
+    this.moveThreshold = opts.moveThreshold ?? 0.006;
 
-    // Published state
-    this.indexTip      = { x: 0.5, y: 0.5 };
-    this.thumbTip      = { x: 0.5, y: 0.5 };
-    this.isPainting    = false;
-    this.isMoving      = false;
-    this.brushDepth    = 0.5;   // 0=far, 1=close
-    this.ready         = false;
-    this.numHands      = 0;     // how many hands currently detected
+    // ── Published state ───────────────────────────────────────────────────────
+    this.indexTip          = { x: 0.5, y: 0.5 };
+    this.thumbTip          = { x: 0.5, y: 0.5 };
+    this.isPainting        = false;
+    this.paintHoldProgress = 0;   // 0 → 1 over the 2-second hold
+    this.isMoving          = false;
+    this.brushDepth        = 0.5;
+    this.ready             = false;
+    this.numHands          = 0;
 
-    // Callback
+    // ── Callback ─────────────────────────────────────────────────────────────
     this.onClear = null;
 
-    // Internal
-    this._landmarker     = null;
-    this._lastVideoTime  = -1;
-    this._posHistory     = [];
-    this._historySize    = 6;
+    // ── Internal ──────────────────────────────────────────────────────────────
+    this._landmarker    = null;
+    this._lastVideoTime = -1;
+    this._posHistory    = [];
+    this._historySize   = 6;
 
-    // Single-hand OPEN clear
-    this._openTimer = 0;
+    // Hold-to-paint (0.8 s = fast enough to feel instant, safe against jitter)
+    this._paintHoldTimer    = 0;
+    this._paintHoldDuration = 0.8;
+    this._paintJustStarted  = false;   // one-frame flag for "start" flash
+    this._paintStartFlash   = 0;       // expanding ring alpha on paint-start
 
-    // Two-hand wave detection
-    this._prevWristX  = [null, null];
-    this._waveTimer   = 0;
-    this._waveCooldown = 0;
-    this._waveFlash   = 0;    // >0 → draw wave indicator
+    // Stop hysteresis — brief finger-dip won't break a stroke
+    this._paintStopTimer = 0;
+    this._paintStopDelay = 0.25;   // seconds of index-down before painting stops
+
+    // 👍 Thumbs-up hold-to-clear (3 s — firm intent without being tedious)
+    this._thumbsUpTimer    = 0;
+    this._thumbsUpDuration = 3.0;
+    this._clearCooldown    = 0;    // post-clear lockout
+    this._clearFlash       = 0;    // success flash alpha
+
+    // Face detection
+    this._faceDetector  = null;
+    this._activeFaceBox = null;   // { x, y, w, h } normalised, primary face
+    this._numFaces      = 0;      // how many faces currently detected
+    this._lastFaceTime  = -1;     // avoid re-running every frame
 
     this._overlayWidth  = 0;
     this._overlayHeight = 0;
@@ -63,8 +84,7 @@ export class HandTracker {
   }
 
   _syncOverlaySize() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    const w = window.innerWidth, h = window.innerHeight;
     if (w === this._overlayWidth && h === this._overlayHeight) return;
     this.overlay.width  = w;
     this.overlay.height = h;
@@ -77,7 +97,7 @@ export class HandTracker {
     try {
       const { HandLandmarker, FilesetResolver } =
         await import('@mediapipe/tasks-vision');
-      const base   = import.meta.env.BASE_URL;          // '/Spatiality/' on GH Pages, '/' locally
+      const base   = import.meta.env.BASE_URL;
       const vision = await FilesetResolver.forVisionTasks(base + 'wasm');
 
       // Try GPU first, fall back to CPU silently
@@ -94,38 +114,60 @@ export class HandTracker {
           numHands: 2, runningMode: 'VIDEO',
         });
       }
+
       await this._startCamera();
       this.ready = true;
-      // Hide camera prompt if visible
       const prompt = document.getElementById('camera-prompt');
       if (prompt) prompt.style.display = 'none';
       const chip = document.getElementById('hint-chip');
-      if (chip) chip.textContent = 'Point finger to paint · Wave both hands to clear ✦';
+      if (chip) chip.textContent =
+        '☝️  Point to paint  ·  👍  Hold 3 s to clear ✦';
+
+      // Face detector loads in background — non-blocking, non-critical
+      this._initFaceDetector().catch(e =>
+        console.warn('[FaceDetector] not available:', e.message)
+      );
     } catch (err) {
       console.error('HandTracker init error:', err);
       this._showCameraError(err);
     }
   }
 
+  // ── Face detector (background load, optional) ────────────────────────────
+  async _initFaceDetector() {
+    const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision');
+    const base   = import.meta.env.BASE_URL;
+    const vision = await FilesetResolver.forVisionTasks(base + 'wasm');
+    this._faceDetector = await FaceDetector.createFromOptions(vision, {
+      baseOptions: {
+        // Official MediaPipe short-range face detection model
+        modelAssetPath:
+          'https://storage.googleapis.com/mediapipe-models/face_detector/' +
+          'blaze_face_short_range/float16/1/blaze_face_short_range.task',
+        delegate: 'GPU',
+      },
+      runningMode:              'VIDEO',
+      minDetectionConfidence:   0.50,
+      minSuppressionThreshold:  0.30,
+    });
+    console.log('[FaceDetector] ready');
+  }
+
+  // ── Camera ────────────────────────────────────────────────────────────────
   _showCameraError(err) {
     const isPermission = err && (
-      err.name === 'NotAllowedError' ||
-      err.name === 'PermissionDeniedError' ||
+      err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' ||
       (err.message && err.message.includes('Permission'))
     );
     const isNoCamera = err && (
-      err.name === 'NotFoundError' ||
-      err.name === 'DevicesNotFoundError'
+      err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError'
     );
-
     const chip = document.getElementById('hint-chip');
     if (chip) chip.textContent = '🎥 Camera blocked — follow the steps below';
-
     if (isNoCamera) {
       if (chip) chip.textContent = '📷 No camera found — use mouse to paint';
       this._showCameraPrompt('nocamera');
     } else {
-      // Permission denied (or unknown) — show Chrome fix steps
       this._showCameraPrompt('blocked');
     }
   }
@@ -153,20 +195,17 @@ export class HandTracker {
       <p style="color:#999;font-size:12px;margin:0 0 18px;line-height:1.5">
         Chrome blocked the camera. Fix it in 3 steps:
       </p>
-
       <div style="text-align:left;background:#fff8ee;border-radius:12px;padding:14px 16px;margin-bottom:18px;font-size:13px;line-height:2">
         <div><b style="color:#ff8c00">Step 1</b> — Look at the address bar above</div>
         <div><b style="color:#ff8c00">Step 2</b> — Click the 🔒 or 📷 icon on the left of the URL</div>
         <div><b style="color:#ff8c00">Step 3</b> — Set <b>Camera</b> to <b style="color:green">Allow</b></div>
       </div>
-
       <button id="cam-retry-btn" style="
         background:#22c55e;color:#fff;border:none;border-radius:12px;
         padding:12px 0;font-size:14px;font-weight:700;cursor:pointer;
         width:100%;margin-bottom:10px;
         box-shadow:0 4px 14px rgba(34,197,94,0.35);
       ">✅ I allowed it — start camera</button>
-
       <button id="cam-skip-btn" style="
         background:transparent;color:#bbb;border:1px solid #e0e0e0;
         border-radius:12px;padding:9px 0;font-size:13px;cursor:pointer;width:100%;
@@ -192,35 +231,56 @@ export class HandTracker {
     prompt.innerHTML = type === 'nocamera' ? noCameraHTML : blockedHTML;
     prompt.style.display = 'block';
 
-    // Retry: only re-request camera — MediaPipe is already loaded
-    document.getElementById('cam-retry-btn')?.addEventListener('click', async () => {
-      prompt.style.display = 'none';
-      const chip = document.getElementById('hint-chip');
-      if (chip) chip.textContent = 'Starting camera…';
-      try {
-        await this._startCamera();
-        this.ready = true;
-        if (chip) chip.textContent = 'Point finger to paint · Wave both hands to clear ✦';
-      } catch (err) {
-        console.error('Camera retry failed:', err);
-        this._showCameraError(err);
-      }
+    document.getElementById('cam-retry-btn')?.addEventListener('click', () => {
+      const chip = document.getElementById('hint-chip')
+      if (chip) chip.textContent = 'Starting camera…'
+      this.startCamera()   // public method handles hide + retry + ready flag
     });
 
-    // Skip: dismiss and use mouse
     document.getElementById('cam-skip-btn')?.addEventListener('click', () => {
       prompt.style.display = 'none';
       const chip = document.getElementById('hint-chip');
-      if (chip) chip.textContent = 'Mouse mode — click and drag to paint ✦';
+      if (chip) chip.textContent = '🖱️  Click and drag to paint ✦';
     });
   }
 
-  async _startCamera() {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 1280, height: 720, facingMode: 'user' },
-    });
-    this.video.srcObject = stream;
-    return new Promise(r => { this.video.onloadeddata = r; });
+  async _startCamera(deviceId = null) {
+    // Build video constraints.  If a deviceId is provided (user picked a camera),
+    // use it exactly.  Otherwise try ideal 720p; fall back to plain {video:true}
+    // because desktop webcams often reject the facingMode constraint.
+    let stream
+    const base = deviceId
+      ? { deviceId: { exact: deviceId } }
+      : { width: { ideal: 1280 }, height: { ideal: 720 } }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: base })
+    } catch (_) {
+      stream = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId } } : true })
+    }
+    // Stop any previous stream
+    if (this.video.srcObject) {
+      this.video.srcObject.getTracks().forEach(t => t.stop())
+    }
+    this.video.srcObject = stream
+    await this.video.play().catch(() => {})
+    return new Promise(r => { this.video.onloadeddata = r })
+  }
+
+  /**
+   * Public restart — called by the camera-gate after the user grants permission.
+   * Hides any existing camera-error prompt, re-starts the stream, sets ready.
+   */
+  async startCamera(deviceId = null) {
+    const prompt = document.getElementById('camera-prompt')
+    if (prompt) prompt.style.display = 'none'
+    try {
+      await this._startCamera(deviceId)
+      this.ready = true
+      const chip = document.getElementById('hint-chip')
+      if (chip) chip.textContent = '☝️  Point to paint  ·  👍  Hold 3 s to clear ✦'
+    } catch (err) {
+      this._showCameraError(err)
+    }
   }
 
   // ── Public update ─────────────────────────────────────────────────────────
@@ -230,34 +290,70 @@ export class HandTracker {
     if (this.video.currentTime === this._lastVideoTime) return;
     this._lastVideoTime = this.video.currentTime;
 
-    const results = this._landmarker.detectForVideo(this.video, performance.now());
+    const now     = performance.now();
+    const results = this._landmarker.detectForVideo(this.video, now);
 
     this._syncOverlaySize();
     this.ctx.clearRect(0, 0, this._overlayWidth, this._overlayHeight);
 
     this.numHands = results.landmarks?.length ?? 0;
 
+    // ── Optional face detection (every ~3rd frame to save GPU budget) ─────
+    if (this._faceDetector && now - this._lastFaceTime > 50) {
+      this._lastFaceTime = now;
+      try {
+        const fr = this._faceDetector.detectForVideo(this.video, now);
+        this._updateActiveFace(fr.detections ?? []);
+      } catch (_) { /* ignore */ }
+    }
+
+    // Draw detected faces on overlay
+    if (this._activeFaceBox) this._drawFaceOverlay();
+
     if (this.numHands >= 2) {
-      // Two hands — process primary hand for painting, check for wave
       this._process(results.landmarks[0], dt);
-      this._checkWave(results.landmarks[0], results.landmarks[1], dt);
+      this._checkThumbsUp(results.landmarks[0], dt);
       this._drawSkeleton(results.landmarks[0]);
       this._drawSkeleton(results.landmarks[1]);
       this._drawHUD(results.landmarks[0]);
-      this._drawWaveIndicator(dt);
     } else if (this.numHands === 1) {
-      this._waveTimer    = 0;
-      this._prevWristX   = [null, null];
       this._process(results.landmarks[0], dt);
+      this._checkThumbsUp(results.landmarks[0], dt);
       this._drawSkeleton(results.landmarks[0]);
       this._drawHUD(results.landmarks[0]);
     } else {
       this._reset();
     }
+    this._drawThumbsUpIndicator();
 
-    // Cooldown tick
-    if (this._waveCooldown > 0) this._waveCooldown -= dt;
-    if (this._waveFlash   > 0) this._waveFlash   -= dt;
+    if (this._clearCooldown > 0) this._clearCooldown -= dt;
+    if (this._clearFlash    > 0) this._clearFlash    -= dt;
+  }
+
+  // ── Update active face from detector results ──────────────────────────────
+  _updateActiveFace(detections) {
+    this._numFaces = detections.length;
+    if (!detections.length) { this._activeFaceBox = null; return; }
+
+    // Primary face = largest bounding-box area (proxy for "closest to camera")
+    let best = null, bestArea = 0;
+    for (const d of detections) {
+      const bb = d.boundingBox;
+      const area = bb.width * bb.height;
+      if (area > bestArea) { bestArea = area; best = bb; }
+    }
+    if (!best) { this._activeFaceBox = null; return; }
+
+    // Normalise to [0,1] — MediaPipe gives pixel coords when runningMode=VIDEO
+    const vw = this.video.videoWidth  || 1280;
+    const vh = this.video.videoHeight || 720;
+    // Mirror X to match the mirrored hand landmarks (1 - x)
+    this._activeFaceBox = {
+      x: 1 - (best.originX + best.width)  / vw,
+      y:     best.originY                  / vh,
+      w:     best.width                    / vw,
+      h:     best.height                   / vh,
+    };
   }
 
   // ── Core single-hand processing ───────────────────────────────────────────
@@ -265,8 +361,7 @@ export class HandTracker {
     this.indexTip = { x: 1 - lm[8].x, y: lm[8].y };
     this.thumbTip = { x: 1 - lm[4].x, y: lm[4].y };
 
-    // Brush depth from Z: negative = closer to camera
-    // Typical range: -0.15 (very close) to +0.05 (far away)
+    // Brush depth from Z
     const rawZ = lm[8].z;
     this.brushDepth = Math.max(0, Math.min(1, (-rawZ - 0.02) / 0.12));
 
@@ -279,50 +374,101 @@ export class HandTracker {
       this.isMoving = Math.sqrt((b.x-a.x)**2 + (b.y-a.y)**2) > this.moveThreshold;
     }
 
-    // ── Painting = index finger extended (no pinch required) ───────────────
-    const ext = this._extended(lm);
-    this.isPainting = ext.index;
+    // ── Face-based active-user gate ────────────────────────────────────────
+    // Only activates when ≥2 faces are visible (crowded room scenario).
+    // With a single person the gate is off — no false blocks.
+    // Tolerance = 5× face width to handle arms extended sideways.
+    const wristX = 1 - lm[0].x;
+    if (this._numFaces >= 2 && this._activeFaceBox) {
+      const fc = this._activeFaceBox.x + this._activeFaceBox.w / 2;
+      const fw = this._activeFaceBox.w;
+      if (Math.abs(wristX - fc) > fw * 5.0) {
+        this._paintHoldTimer   = 0;
+        this.isPainting        = false;
+        this.paintHoldProgress = 0;
+        return;
+      }
+    }
 
-    // ── OPEN hand: single-hand clear (hold 1.2 s) ──────────────────────────
-    const n = [ext.index, ext.middle, ext.ring, ext.pinky].filter(Boolean).length;
-    if (n >= 4) {
-      this._openTimer += dt;
-      if (this._openTimer >= this._clearDuration) {
-        this._openTimer = 0;
+    // ── Hold-to-paint with stop hysteresis ────────────────────────────────
+    // Fill fast when index is extended.
+    // Once painting, brief finger drops are forgiven for _paintStopDelay seconds
+    // so normal hand jitter never breaks a stroke mid-painting.
+    // Hard fist (all 4 fingers curled) stops immediately regardless.
+    const ext = this._extended(lm);
+    const wasReady = this.isPainting;
+
+    const isFist = !ext.index && !ext.middle && !ext.ring && !ext.pinky
+                   && !this._isThumbsUp(lm);  // thumbs-up is not a fist
+
+    if (ext.index) {
+      // Filling: fill at 1/duration per second
+      this._paintHoldTimer = Math.min(this._paintHoldDuration,
+                                      this._paintHoldTimer + dt);
+      this._paintStopTimer = 0;   // index is back — reset stop hysteresis
+    } else if (wasReady) {
+      // Was painting — apply stop hysteresis
+      if (isFist) {
+        // Deliberate fist: stop immediately
+        this._paintHoldTimer = 0;
+        this._paintStopTimer = 0;
+      } else {
+        // Accidental dip: wait before draining
+        this._paintStopTimer += dt;
+        if (this._paintStopTimer >= this._paintStopDelay) {
+          this._paintHoldTimer = Math.max(0, this._paintHoldTimer - dt * 6.0);
+        }
+        // Within hysteresis window: hold timer steady (painting continues)
+      }
+    } else {
+      // Not painting and not filling: slow drain preserves ring progress
+      this._paintHoldTimer = Math.max(0,
+        this._paintHoldTimer - dt * 0.15 * this._paintHoldDuration);
+      this._paintStopTimer = 0;
+    }
+
+    const isReady = this._paintHoldTimer >= this._paintHoldDuration;
+    this._paintJustStarted = isReady && !wasReady;
+    this.isPainting        = isReady;
+    this.paintHoldProgress = this._paintHoldTimer / this._paintHoldDuration;
+
+    if (this._paintJustStarted) this._paintStartFlash = 0.55;
+    if (this._paintStartFlash > 0) this._paintStartFlash -= dt * 1.8;
+  }
+
+  // ── 👍 Thumbs-up gesture detection ───────────────────────────────────────
+  // Two conditions must both be true:
+  //   1. All four non-thumb fingers are NOT extended  (uses same _extended()
+  //      logic that reliably drove the old open-hand clear)
+  //   2. Thumb tip is above the index MCP knuckle line (lm[5])
+  //      → distinguishes "thumb up" from "thumb folded into fist"
+  _isThumbsUp(lm) {
+    const ext = this._extended(lm);
+    // 4 fingers must all be NOT extended (curled / in fist)
+    if (ext.index || ext.middle || ext.ring || ext.pinky) return false;
+    // Thumb tip (lm[4]) must be above index knuckle (lm[5], Y decreases upward)
+    return lm[4].y < lm[5].y;
+  }
+
+  // Hold thumbs-up for 5 s → onClear().  Works with 1 or 2 hands visible.
+  // Accumulator fills while gesture holds; drops fast when hand changes shape
+  // so accidental overlap with other gestures is cleared quickly.
+  _checkThumbsUp(lm, dt) {
+    if (this._clearCooldown > 0) return;
+
+    if (this._isThumbsUp(lm)) {
+      this._thumbsUpTimer = Math.min(this._thumbsUpDuration,
+                                     this._thumbsUpTimer + dt);
+      if (this._thumbsUpTimer >= this._thumbsUpDuration) {
+        this._thumbsUpTimer = 0;
+        this._clearCooldown = 2.5;
+        this._clearFlash    = 0.9;
         if (this.onClear) this.onClear();
       }
     } else {
-      this._openTimer = 0;
+      // Faster decay (1.5 s/s) so a wrong hand-shape clears the progress
+      this._thumbsUpTimer = Math.max(0, this._thumbsUpTimer - dt * 1.5);
     }
-  }
-
-  // ── Two-hand wave detection ───────────────────────────────────────────────
-  // Both wrists must be moving quickly (horizontal velocity > 1.0 normalised/s)
-  // for at least 0.4 seconds → onClear()
-  _checkWave(lm1, lm2, dt) {
-    if (this._waveCooldown > 0) return;
-
-    const w1x = 1 - lm1[0].x;
-    const w2x = 1 - lm2[0].x;
-
-    if (this._prevWristX[0] !== null) {
-      const v1 = Math.abs((w1x - this._prevWristX[0]) / dt);
-      const v2 = Math.abs((w2x - this._prevWristX[1]) / dt);
-
-      if (v1 > 1.0 && v2 > 1.0) {
-        this._waveTimer += dt;
-        if (this._waveTimer >= 0.4) {
-          this._waveTimer    = 0;
-          this._waveCooldown = 2.0;   // 2 s before next wave can trigger
-          this._waveFlash    = 0.8;
-          if (this.onClear) this.onClear();
-        }
-      } else if (v1 < 0.4 && v2 < 0.4) {
-        this._waveTimer = Math.max(0, this._waveTimer - dt * 2);
-      }
-    }
-    this._prevWristX[0] = w1x;
-    this._prevWristX[1] = w2x;
   }
 
   // ── Helper: which fingers are extended ────────────────────────────────────
@@ -337,13 +483,16 @@ export class HandTracker {
   }
 
   _reset() {
-    this.isPainting   = false;
-    this.isMoving     = false;
-    this.brushDepth   = 0.5;
-    this._posHistory  = [];
-    this._openTimer   = 0;
-    this._prevWristX  = [null, null];
-    this._waveTimer   = 0;
+    this.isPainting        = false;
+    this.paintHoldProgress = 0;
+    this.isMoving          = false;
+    this.brushDepth        = 0.5;
+    this._posHistory       = [];
+    this._paintHoldTimer   = 0;
+    this._paintJustStarted = false;
+    this._paintStopTimer   = 0;
+    this._paintStartFlash  = 0;
+    this._thumbsUpTimer    = 0;
   }
 
   // ── HUD drawing ───────────────────────────────────────────────────────────
@@ -353,73 +502,169 @@ export class HandTracker {
     const px = i => (1 - lm[i].x) * W;
     const py = i => lm[i].y * H;
 
-    // OPEN: clear progress ring
-    if (this._openTimer > 0) {
-      const prog = this._openTimer / this._clearDuration;
-      const cx = W/2, cy = H/2;
+    const ix = px(8), iy = py(8);
+
+    // ── Hold-to-paint countdown — compact ring + tiny label near fingertip ──
+    // No full-screen popups: the user can see what they're about to paint on.
+    if (!this.isPainting && this.paintHoldProgress > 0) {
+      const prog = this.paintHoldProgress;
+
+      // Growing arc around the index tip
       ctx.save();
-      ctx.strokeStyle = `rgba(239,100,60,${0.4 + prog * 0.6})`;
-      ctx.lineWidth   = 7;
+      const ringR = 26 + prog * 10;
+      ctx.strokeStyle = `rgba(60,180,120,${0.30 + prog * 0.70})`;
+      ctx.lineWidth   = 4 + prog * 2;
       ctx.lineCap     = 'round';
+      ctx.shadowColor = `rgba(60,200,120,${prog * 0.45})`;
+      ctx.shadowBlur  = prog * 16;
       ctx.beginPath();
-      ctx.arc(cx, cy, 50, -Math.PI/2, -Math.PI/2 + prog * Math.PI * 2);
+      ctx.arc(ix, iy, ringR, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2);
       ctx.stroke();
-      ctx.fillStyle = `rgba(239,100,60,${0.6 + prog * 0.4})`;
-      ctx.font = 'bold 15px system-ui';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('CLEAR', cx, cy);
+      ctx.shadowBlur = 0;
+      ctx.restore();
+
+      // Small floating label just above the finger (no popup, no center card)
+      ctx.save();
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.font         = `bold ${13 + prog * 3}px system-ui, sans-serif`;
+      ctx.fillStyle    = `rgba(30,120,70,${0.55 + prog * 0.45})`;
+      const label = prog > 0.88 ? '✦ Starting!' : 'Hold still…';
+      ctx.fillText(label, ix, iy - ringR - 8);
       ctx.restore();
     }
 
-    // Painting cursor — large coloured circle at index tip
-    if (this.isPainting) {
-      const ix = px(8), iy = py(8);
-      const r  = 12 + this.brushDepth * 22;
+    // ── Paint-start flash — expanding green ring at the moment painting begins
+    if (this._paintStartFlash > 0) {
+      const a   = Math.max(0, this._paintStartFlash);
+      const exp = 1 - a / 0.55;           // 0 → 1 as it expands
       ctx.save();
+      ctx.beginPath();
+      ctx.arc(ix, iy, 28 + exp * 38, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(60,200,120,${a * 1.8})`;
+      ctx.lineWidth   = 3 + (1 - exp) * 4;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ── Painting cursor — ring follows brush depth (small=detail, big=wash) ─
+    if (this.isPainting) {
+      const r = 14 + this.brushDepth * 20;
+      ctx.save();
+      // Outer glow ring
+      ctx.beginPath();
+      ctx.arc(ix, iy, r + 4, 0, Math.PI * 2);
+      ctx.strokeStyle = this.isMoving
+        ? 'rgba(255,220,50,0.25)'
+        : 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      // Inner crisp ring
       ctx.beginPath();
       ctx.arc(ix, iy, r, 0, Math.PI * 2);
       ctx.strokeStyle = this.isMoving
         ? 'rgba(255,220,50,0.95)'
-        : 'rgba(255,255,255,0.60)';
-      ctx.lineWidth = 3;
+        : 'rgba(255,255,255,0.70)';
+      ctx.lineWidth = 2.5;
       ctx.stroke();
       ctx.restore();
     }
   }
 
-  // ── Wave indicator (shown when two-hand wave is in progress) ─────────────
-  _drawWaveIndicator(dt) {
-    if (this._waveFlash <= 0 && this._waveTimer <= 0) return;
+  // ── 👍 Thumbs-up clear indicator ─────────────────────────────────────────
+  _drawThumbsUpIndicator() {
     const ctx = this.ctx;
     const W = this.overlay.width, H = this.overlay.height;
 
-    // Flash on successful wave
-    if (this._waveFlash > 0) {
-      const alpha = this._waveFlash / 0.8;
+    // ── Success flash ──────────────────────────────────────────────────────
+    if (this._clearFlash > 0) {
+      const a = this._clearFlash / 0.9;
       ctx.save();
-      ctx.fillStyle = `rgba(255,200,50,${alpha * 0.18})`;
+      ctx.fillStyle = `rgba(255,230,80,${a * 0.20})`;
       ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = `rgba(255,200,50,${alpha})`;
-      ctx.font = 'bold 48px system-ui';
-      ctx.textAlign = 'center';
+      ctx.textAlign    = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('🌊 Cleared!', W/2, H/2);
+      ctx.fillStyle    = `rgba(255,210,30,${a})`;
+      ctx.font         = 'bold 56px system-ui';
+      ctx.fillText('👍 Canvas Cleared!', W / 2, H / 2);
       ctx.restore();
       return;
     }
 
-    // Progress bar for wave
-    const prog = this._waveTimer / 0.4;
+    if (this._thumbsUpTimer <= 0) return;
+
+    // ── In-progress: large ring + countdown ───────────────────────────────
+    const prog = this._thumbsUpTimer / this._thumbsUpDuration;
+    const rem  = (this._thumbsUpDuration - this._thumbsUpTimer).toFixed(1);
+    const cx   = W / 2, cy = H / 2;
+    const R    = 64;
+
     ctx.save();
-    ctx.fillStyle = `rgba(100,180,255,${0.5 + prog * 0.5})`;
-    ctx.font = 'bold 22px system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText(`🌊 Keep waving…`, W/2, 60);
-    ctx.fillStyle = 'rgba(100,180,255,0.25)';
-    ctx.fillRect(W/2 - 100, 72, 200, 8);
-    ctx.fillStyle = `rgba(100,180,255,${0.6 + prog * 0.4})`;
-    ctx.fillRect(W/2 - 100, 72, 200 * prog, 8);
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Pill backdrop
+    ctx.fillStyle   = 'rgba(255,245,200,0.20)';
+    ctx.shadowColor = 'rgba(200,140,0,0.30)';
+    ctx.shadowBlur  = 24;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Background track ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,200,60,0.22)';
+    ctx.lineWidth   = 12;
+    ctx.stroke();
+
+    // Progress arc
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,195,30,${0.60 + prog * 0.40})`;
+    ctx.lineWidth   = 12;
+    ctx.lineCap     = 'round';
+    ctx.stroke();
+
+    // Emoji + countdown
+    ctx.font      = '38px system-ui';
+    ctx.fillStyle = `rgba(255,220,40,${0.85 + prog * 0.15})`;
+    ctx.fillText('👍', cx, cy - 12);
+    ctx.font      = `bold ${14 + prog * 4}px system-ui, sans-serif`;
+    ctx.fillStyle = `rgba(230,160,20,0.95)`;
+    ctx.fillText(`${rem} s`, cx, cy + 24);
+
+    // Label below
+    ctx.font      = 'bold 15px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(180,110,10,0.80)';
+    ctx.fillText('👍  Hold to clear canvas', cx, cy + R + 28);
+    ctx.restore();
+  }
+
+  // ── Face overlay ──────────────────────────────────────────────────────────
+  _drawFaceOverlay() {
+    if (!this._activeFaceBox) return;
+    const ctx = this.ctx;
+    const W = this.overlay.width, H = this.overlay.height;
+    const { x, y, w, h } = this._activeFaceBox;
+
+    const fx = x * W, fy = y * H, fw = w * W, fh = h * H;
+
+    ctx.save();
+    // Soft green border around the active artist's face
+    ctx.strokeStyle = 'rgba(60,200,120,0.65)';
+    ctx.lineWidth   = 2.5;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(fx, fy, fw, fh);
+    ctx.setLineDash([]);
+
+    // "✦ Artist" label at top-right of face box
+    ctx.fillStyle    = 'rgba(40,160,90,0.80)';
+    ctx.font         = 'bold 13px system-ui, sans-serif';
+    ctx.textAlign    = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('✦ Artist', fx + fw + 4, fy + 16);
     ctx.restore();
   }
 
@@ -453,16 +698,30 @@ export class HandTracker {
       ctx.beginPath(); ctx.arc(px(i), py(i), 3, 0, Math.PI * 2); ctx.fill();
     }
 
-    // Index tip — bright beacon
-    const tipCol = this.isPainting
-      ? (this.isMoving ? '#ffe032' : 'rgba(255,255,255,0.85)')
-      : 'rgba(200,220,255,0.6)';
+    // Index tip — bright beacon; size & colour reflect current gesture state
+    const prog    = this.paintHoldProgress;
+    const tipR    = this.isPainting ? 11 : (prog > 0 ? 7 + prog * 4 : 7);
+    const tipCol  = this.isPainting
+      ? (this.isMoving ? '#ffe032' : 'rgba(255,255,255,0.90)')
+      : (prog > 0 ? `rgba(60,220,130,${0.60 + prog * 0.40})` : 'rgba(200,220,255,0.6)');
     ctx.fillStyle = tipCol;
     ctx.beginPath();
-    ctx.arc(px(8), py(8), this.isPainting ? 11 : 7, 0, Math.PI * 2);
+    ctx.arc(px(8), py(8), tipR, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth   = 2;
+    ctx.strokeStyle = this.isPainting ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)';
+    ctx.lineWidth   = this.isPainting ? 2.5 : 1.5;
     ctx.stroke();
+
+    // Thumb tip — gold beacon when thumbs-up is active
+    if (this._thumbsUpTimer > 0) {
+      const prog = this._thumbsUpTimer / this._thumbsUpDuration;
+      ctx.fillStyle   = `rgba(255,200,30,${0.7 + prog * 0.3})`;
+      ctx.strokeStyle = 'rgba(255,255,200,0.9)';
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.arc(px(4), py(4), 10 + prog * 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
   }
 }

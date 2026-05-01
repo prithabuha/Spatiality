@@ -56,11 +56,6 @@ export class DiegeticUI {
         font-family: 'Quicksand', 'Varela Round', 'Segoe UI Rounded', sans-serif !important;
       }
 
-      /* Hint chip: keep above palette (TactileTheme.css has it at 175px) */
-      #hint-chip {
-        bottom: 175px !important;
-      }
-
       /* ── Palette board — neumorphic raised bar ───────────────────────── */
       /* Same warm-white surface as everything else; depth from shadows.    */
       #diegetic-palette {
