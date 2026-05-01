@@ -9,9 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "three": "^0.160.0",
     "@mediapipe/tasks-vision": "^0.10.9",
-    "leva": "^0.9.35"
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "leva": "^0.9.35",
+    "qrcode": "^1.5.4",
+    "three": "^0.160.0",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "vite": "^4.5.0"

@@ -31,6 +31,7 @@ uniform vec2  u_screenSize;
 uniform vec2  u_paintUvOffset;
 uniform vec2  u_paintUvScale;
 uniform vec2  u_substrateTexelSize;
+uniform vec2  u_paintTexelSize;  // 1/simRes — for anti-aliased edge blur
 uniform vec2  u_paperTexScale;  // UV repeat scale per surface
 uniform float u_borderBlur;     // 0=sharp edge, 1=very soft dissolve
 
@@ -188,11 +189,40 @@ void main() {
     ? clamp(paintData.rgb / density, vec3(0.0), vec3(1.0))
     : vec3(0.0);
 
-  // ── Vibrance boost — saturated watercolour look ───────────────────────────
-  // High saturation expansion: pull away from grey toward pure hue.
-  // This is how Tint gets its vibrant, luminous colour-on-paper feel.
+  // ── Anti-aliased density for edge blending ───────────────────────────────
+  // 2-texel-radius 13-tap weighted blur on density before edge smoothstep.
+  // Spreads the edge transition over ~4 texels so it renders smoothly at any
+  // display resolution.  Colour and KM physics still use the exact centre
+  // sample — only the mix() blend factor benefits from the smooth gradient.
+  float tw = u_paintTexelSize.x;
+  float th = u_paintTexelSize.y;
+  float tw2 = tw * 2.0;
+  float th2 = th * 2.0;
+  float densitySmooth =
+      density                                                     * 6.0
+    + texture2D(tPaint, paintUV + vec2( tw,  0.0)).a             * 4.0
+    + texture2D(tPaint, paintUV + vec2(-tw,  0.0)).a             * 4.0
+    + texture2D(tPaint, paintUV + vec2( 0.0,  th)).a             * 4.0
+    + texture2D(tPaint, paintUV + vec2( 0.0, -th)).a             * 4.0
+    + texture2D(tPaint, paintUV + vec2( tw,   th)).a             * 2.0
+    + texture2D(tPaint, paintUV + vec2(-tw,   th)).a             * 2.0
+    + texture2D(tPaint, paintUV + vec2( tw,  -th)).a             * 2.0
+    + texture2D(tPaint, paintUV + vec2(-tw,  -th)).a             * 2.0
+    + texture2D(tPaint, paintUV + vec2(tw2,  0.0)).a             * 1.0
+    + texture2D(tPaint, paintUV + vec2(-tw2, 0.0)).a             * 1.0
+    + texture2D(tPaint, paintUV + vec2( 0.0, th2)).a             * 1.0
+    + texture2D(tPaint, paintUV + vec2( 0.0,-th2)).a             * 1.0;
+  densitySmooth /= 34.0;
+
+  // ── Vibrance boost — natural watercolour saturation ──────────────────────
+  // Moderate saturation lift: pull away from grey toward pure hue.
+  // Factor 1.65: vibrant but not neon.  Real watercolour is luminous because
+  // light passes THROUGH the translucent pigment and bounces off white paper —
+  // that luminosity comes from the KM thin-film model below, not from blowing
+  // out saturation.  Over-boosting (>2.0) clips channels and creates a
+  // synthetic "glowing" artefact.  1.65 gives richness without that effect.
   float luma = dot(paintHue, vec3(0.299, 0.587, 0.114));
-  vec3  vivid = mix(vec3(luma), paintHue, 2.60);  // stronger saturation — more pigmented
+  vec3  vivid = mix(vec3(luma), paintHue, 1.65);
   vivid = clamp(vivid, 0.0, 1.0);
 
   // ── Kubelka-Munk thin-film reflectance ────────────────────────────────────
@@ -207,18 +237,24 @@ void main() {
   //   This matches the DiVerdi "Painting with Polygons" aesthetic where
   //   watercolour washes are luminous and transparent, not washed-out.
 
-  float thickness = density * 2.0;
+  // Reduced thickness multiplier → more transparent at low density.
+  // Old: density * 5.0 made light washes (density=0.2) behave like thick gouache.
+  // New: density * 3.2 keeps transparency at low density, opaque at high density:
+  //   density=0.10 → ~55% paper visible (light tint)
+  //   density=0.30 → ~20% paper visible (soft wash)
+  //   density=0.65 → ~4%  paper visible (rich stain)
+  float thickness = density * 1.6;
 
-  // K/S from paint hue — boosted absorption for saturated pigment
+  // K/S from paint hue — boosted absorption for rich pigment depth
   vec3 ks = _kmReflToKS(vivid);
-  ks *= 1.6;  // moderate absorption — vivid colour without darkening
+  ks *= 1.45;  // real-pigment absorption strength; slightly reduced from 1.6
 
   // Infinite-layer reflectance R∞ and extinction coefficient b
   vec3 Rinf = _kmKSToRefl(ks);
   vec3 b    = sqrt(ks * ks + 2.0 * ks);
 
   // Thin-film absorption: exponential decay through pigment layer
-  vec3 kmResult = Rinf + (canvas - Rinf) * exp(-b * thickness * 2.5);
+  vec3 kmResult = Rinf + (canvas - Rinf) * exp(-b * thickness * 2.0);
 
   // ── Paper grain break-up through paint ────────────────────────────────────
   // Grain clearly shows even through dense paint — valley fibres punch through.
@@ -246,10 +282,12 @@ void main() {
   // ── Final blend: 100% interior opacity, 30% transparent edges ────────────
   // Paint interior is fully opaque (100%). Edge zone (density < 0.25) fades
   // to a max of 70% — giving soft, organic watercolour edge feathering.
-  float blurHigh = 0.012 + u_borderBlur * 0.10;  // 0=sharp(0.012), 1=soft(0.112)
-  float rawBlend  = smoothstep(0.001, blurHigh, density);
+  float blurHigh = 0.018 + u_borderBlur * 0.12;  // 0=sharp(0.018), 1=soft(0.138)
+  // Use blurred density for the edge blend — eliminates pixelated step artefacts.
+  // Interior colour/KM still uses the exact centre `density` for accuracy.
+  float rawBlend  = smoothstep(0.001, blurHigh, densitySmooth);
   // Ramp from 70% at the edge to 100% at density=0.25 (interior body)
-  float edgeFade  = mix(0.70, 1.0, smoothstep(blurHigh * 2.0, 0.25, density));
+  float edgeFade  = mix(0.70, 1.0, smoothstep(blurHigh * 2.0, 0.28, densitySmooth));
   float kmBlend   = rawBlend * edgeFade;
   vec3 result = mix(canvas, kmResult, kmBlend);
 

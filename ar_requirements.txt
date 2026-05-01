@@ -1,0 +1,31 @@
+# Spatiality AR  →  MadMapper  —  Python dependencies
+# ────────────────────────────────────────────────────
+# Install for your OS  (copy the right block into your terminal)
+#
+# ── Windows (Spout2) ──────────────────────────────────────────────────────────
+#
+#   pip install SpoutGL PyOpenGL PyOpenGL_accelerate glfw websockets numpy Pillow
+#
+# ── macOS (Syphon Metal) ──────────────────────────────────────────────────────
+#
+#   pip install syphon-python pyobjc-framework-Metal pyobjc-framework-Cocoa \
+#               websockets numpy Pillow
+#
+# Verified Python version:  3.10 – 3.12
+# ─────────────────────────────────────────────────────────────────────────────
+
+# shared (both platforms)
+websockets>=12.0
+numpy>=1.26
+Pillow>=10.0
+
+# Windows only  (comment out on macOS)
+SpoutGL>=0.2.0
+PyOpenGL>=3.1.7
+PyOpenGL_accelerate>=3.1.7
+glfw>=2.6.0
+
+# macOS only  (comment out on Windows)
+# syphon-python>=0.1.0
+# pyobjc-framework-Metal>=10.0
+# pyobjc-framework-Cocoa>=10.0

@@ -1,0 +1,314 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="1920" height="1080" viewBox="0 0 1920 1080"
+     style="background:#e8e6e1">
+
+  <!-- ╔══════════════════════════════════════════════════════╗ -->
+  <!-- ║  KIOSK CONTROLS SCREEN — 1920×1080                  ║ -->
+  <!-- ║  Spatiality · Watercolour AR Wall                   ║ -->
+  <!-- ╚══════════════════════════════════════════════════════╝ -->
+
+  <!-- Background -->
+  <rect id="bg" x="0" y="0" width="1920" height="1080" fill="#e8e6e1"/>
+
+  <!-- ─────────────────────────────────────────────────────── -->
+  <!-- TOPBAR                                                  -->
+  <!-- ─────────────────────────────────────────────────────── -->
+  <g id="topbar">
+    <rect x="0" y="0" width="1920" height="80" fill="#edecea"/>
+    <rect x="0" y="79" width="1920" height="1" fill="#d0cdc8"/>
+    <!-- Logo -->
+    <text x="64" y="50" font-family="Inter, Segoe UI, Arial, sans-serif"
+          font-size="26" font-weight="700" fill="#1a1a1a" letter-spacing="-0.5">Spatiality</text>
+    <!-- Hint -->
+    <text x="960" y="50" font-family="Inter, Segoe UI, Arial, sans-serif"
+          font-size="18" fill="#6b6864" text-anchor="middle">
+      Touch the canvas to paint · Select colours and brush below
+    </text>
+    <!-- Done pill -->
+    <g id="btn-done">
+      <rect x="1764" y="18" width="128" height="44" rx="22" fill="#1a1a1a"/>
+      <text x="1828" y="46" font-family="Inter, Segoe UI, Arial, sans-serif"
+            font-size="16" font-weight="600" fill="#ffffff" text-anchor="middle">Done</text>
+    </g>
+  </g>
+
+  <!-- ─────────────────────────────────────────────────────── -->
+  <!-- COLUMN DIVIDERS                                         -->
+  <!-- ─────────────────────────────────────────────────────── -->
+  <g id="dividers" fill="none" stroke="#d0cdc8" stroke-width="1">
+    <line x1="360"  y1="80" x2="360"  y2="1080"/>
+    <line x1="960"  y1="80" x2="960"  y2="1080"/>
+    <line x1="1440" y1="80" x2="1440" y2="1080"/>
+  </g>
+
+  <!-- ─────────────────────────────────────────────────────── -->
+  <!-- COLUMN LABELS                                           -->
+  <!-- ─────────────────────────────────────────────────────── -->
+  <g id="col-labels" font-family="Inter, Segoe UI, Arial, sans-serif"
+     font-size="13" font-weight="600" fill="#9b9690" letter-spacing="1.5">
+    <text x="180"  y="117" text-anchor="middle">WATER</text>
+    <text x="660"  y="117" text-anchor="middle">COLOUR</text>
+    <text x="1200" y="117" text-anchor="middle">BRUSH TYPE</text>
+    <text x="1680" y="117" text-anchor="middle">BRUSH SIZE</text>
+  </g>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- COL 1 — WATER                                          -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <g id="water-col">
+
+    <!-- Track -->
+    <rect id="water-track" x="135" y="284" width="90" height="680" rx="45" fill="#d8d6d1"/>
+
+    <!-- Fill layer (42 %) — bottom 285 px of 680 px capsule -->
+    <!-- Capsule bottom = 284+680=964, fill from y=679 to 964 -->
+    <rect x="135" y="679" width="90" height="285" rx="0" fill="#60a5fa"/>
+    <!-- Round the bottom corners of the fill by drawing over the corners -->
+    <rect x="135" y="919" width="90" height="45" rx="0" fill="#60a5fa"/>
+    <!-- Mask fill to pill shape by drawing a pill on top that punches out — use same outline later -->
+    <!-- Bottom rounded cap -->
+    <path d="M135,939 Q135,964 180,964 Q225,964 225,939 L225,964 L135,964 Z" fill="#60a5fa"/>
+    <!-- Re-draw track outline to crop fill edges cleanly -->
+    <rect x="135" y="284" width="90" height="680" rx="45" fill="none" stroke="#d8d6d1" stroke-width="2"/>
+
+    <!-- Tick marks + labels -->
+    <g id="water-ticks" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="10" fill="#9b9690">
+      <line x1="135" y1="352" x2="148" y2="352" stroke="#9b9690" stroke-width="1.5"/>
+      <text x="128" y="356" text-anchor="end">100</text>
+      <line x1="135" y1="454" x2="148" y2="454" stroke="#9b9690" stroke-width="1.5"/>
+      <text x="128" y="458" text-anchor="end">75</text>
+      <line x1="135" y1="556" x2="148" y2="556" stroke="#9b9690" stroke-width="1.5"/>
+      <text x="128" y="560" text-anchor="end">50</text>
+      <line x1="135" y1="658" x2="148" y2="658" stroke="#9b9690" stroke-width="1.5"/>
+      <text x="128" y="662" text-anchor="end">25</text>
+    </g>
+
+    <!-- Thumb handle (at 42 % → y≈662) -->
+    <g id="water-thumb">
+      <rect x="117" y="646" width="126" height="52" rx="26" fill="#edecea" stroke="#c0bdb8" stroke-width="1.5"/>
+      <line x1="155" y1="668" x2="205" y2="668" stroke="#9b9690" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="155" y1="676" x2="205" y2="676" stroke="#9b9690" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="155" y1="684" x2="205" y2="684" stroke="#9b9690" stroke-width="2.5" stroke-linecap="round"/>
+    </g>
+
+    <!-- Water drop icon -->
+    <g id="water-drop" transform="translate(180,1006)">
+      <path d="M0,-20 C-2,-14 -16,-4 -16,8 A16,16 0 0,0 16,8 C16,-4 2,-14 0,-20 Z" fill="#60a5fa"/>
+      <!-- Shine -->
+      <ellipse cx="-5" cy="2" rx="3" ry="5" fill="white" opacity="0.4" transform="rotate(-25,-5,2)"/>
+    </g>
+
+    <!-- Percentage label -->
+    <text id="water-pct" x="180" y="1048"
+          font-family="Inter, Segoe UI, Arial, sans-serif"
+          font-size="15" font-weight="700" fill="#3b82f6" text-anchor="middle">42%</text>
+
+  </g><!-- /water-col -->
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- COL 2 — COLOUR WHEEL                                   -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <g id="colour-col">
+
+    <!-- Black / White quick swatches -->
+    <g id="bw-swatches">
+      <circle cx="604" cy="160" r="24" fill="#1a1a1a"/>
+      <text x="604" y="200" font-family="Inter, Segoe UI, Arial, sans-serif"
+            font-size="11" fill="#6b6864" text-anchor="middle">Black</text>
+      <circle cx="664" cy="160" r="24" fill="#ffffff" stroke="#d0cdc8" stroke-width="1.5"/>
+      <text x="664" y="200" font-family="Inter, Segoe UI, Arial, sans-serif"
+            font-size="11" fill="#6b6864" text-anchor="middle">White</text>
+    </g>
+
+    <!-- Wheel group: centered at (660, 600) -->
+    <g id="colour-wheel" transform="translate(660,600)">
+
+      <!-- Outer gutter ring -->
+      <circle r="252" fill="#d0cdc8"/>
+
+      <!-- 12 annular colour segments  R=240 r=82 -->
+      <!-- i=0  Violet  angle 270°→300° (from 12-o'clock CW) -->
+      <path id="seg-violet"  d="M 1.14,-82 L 3.35,-240 A 240,240 0 0,1 116.99,-209.58 L 39.97,-71.6  A 82,82 0 0,0 1.14,-82 Z"   fill="#7C3AED"/>
+      <!-- i=1  Indigo  300°→330° -->
+      <path id="seg-indigo"  d="M 42.13,-70.35 L 123.3,-205.91 A 240,240 0 0,1 205.91,-123.3 L 70.35,-42.13 A 82,82 0 0,0 42.13,-70.35 Z" fill="#4338CA"/>
+      <!-- i=2  Blue  330°→360° -->
+      <path id="seg-blue"    d="M 71.6,-39.97 L 209.58,-116.99 A 240,240 0 0,1 239.98,-3.35 L 82,-1.14   A 82,82 0 0,0 71.6,-39.97 Z"   fill="#2563EB"/>
+      <!-- i=3  Sky   0°→30° -->
+      <path id="seg-sky"     d="M 82,1.14 L 239.98,3.35 A 240,240 0 0,1 209.58,116.99 L 71.6,39.97     A 82,82 0 0,0 82,1.14 Z"         fill="#0284C7"/>
+      <!-- i=4  Teal  30°→60° -->
+      <path id="seg-teal"    d="M 70.35,42.13 L 205.91,123.3 A 240,240 0 0,1 123.3,205.91 L 42.13,70.35  A 82,82 0 0,0 70.35,42.13 Z"   fill="#0D9488"/>
+      <!-- i=5  Green 60°→90° -->
+      <path id="seg-green"   d="M 39.97,71.6 L 116.99,209.58 A 240,240 0 0,1 3.35,239.98 L 1.14,82      A 82,82 0 0,0 39.97,71.6 Z"      fill="#16A34A"/>
+      <!-- i=6  Lime  90°→120° -->
+      <path id="seg-lime"    d="M -1.14,82 L -3.35,239.98 A 240,240 0 0,1 -116.99,209.58 L -39.97,71.6   A 82,82 0 0,0 -1.14,82 Z"       fill="#65A30D"/>
+      <!-- i=7  Yellow 120°→150° -->
+      <path id="seg-yellow"  d="M -42.13,70.35 L -123.3,205.91 A 240,240 0 0,1 -205.91,123.3 L -70.35,42.13 A 82,82 0 0,0 -42.13,70.35 Z" fill="#CA8A04"/>
+      <!-- i=8  Amber 150°→180° -->
+      <path id="seg-amber"   d="M -71.6,39.97 L -209.58,116.99 A 240,240 0 0,1 -239.98,3.35 L -82,1.14    A 82,82 0 0,0 -71.6,39.97 Z"    fill="#D97706"/>
+      <!-- i=9  Orange 180°→210° -->
+      <path id="seg-orange"  d="M -82,-1.14 L -239.98,-3.35 A 240,240 0 0,1 -209.58,-116.99 L -71.6,-39.97 A 82,82 0 0,0 -82,-1.14 Z"     fill="#EA580C"/>
+      <!-- i=10 Rose  210°→240° ACTIVE -->
+      <path id="seg-rose"    d="M -70.35,-42.13 L -205.91,-123.3 A 240,240 0 0,1 -123.3,-205.91 L -42.13,-70.35 A 82,82 0 0,0 -70.35,-42.13 Z" fill="#E11D48"/>
+      <!-- i=11 Pink  240°→270° -->
+      <path id="seg-pink"    d="M -39.97,-71.6 L -116.99,-209.58 A 240,240 0 0,1 -3.35,-239.98 L -1.14,-82  A 82,82 0 0,0 -39.97,-71.6 Z"  fill="#DB2777"/>
+
+      <!-- Active ring — Rose segment midpoint ≈ (-139, -80) in local coords -->
+      <circle cx="-139" cy="-80" r="18" fill="none" stroke="#ffffff" stroke-width="3.5"/>
+
+      <!-- Thin divider lines -->
+      <circle r="240" fill="none" stroke="#e8e6e1" stroke-width="1"/>
+      <circle r="82"  fill="none" stroke="#e8e6e1" stroke-width="1"/>
+
+      <!-- Hub -->
+      <circle r="82" fill="#edecea"/>
+
+      <!-- Active colour swatch in hub -->
+      <circle r="38" fill="#E11D48"/>
+    </g>
+
+    <!-- Colour name chip -->
+    <g id="colour-chip">
+      <rect x="604" y="882" width="112" height="34" rx="17" fill="#E11D48"/>
+      <text x="660" y="904" font-family="Inter, Segoe UI, Arial, sans-serif"
+            font-size="14" font-weight="600" fill="#ffffff" text-anchor="middle">Rose</text>
+    </g>
+
+  </g><!-- /colour-col -->
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- COL 3 — BRUSH TYPE                                     -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <g id="brushtype-col" font-family="Inter, Segoe UI, Arial, sans-serif">
+
+    <!-- WET card — ACTIVE -->
+    <g id="card-wet">
+      <rect x="986" y="148" width="428" height="184" rx="44" fill="#d8d6d1"/>
+      <text x="1058" y="222" font-size="22" font-weight="700" fill="#1a1a1a">Wet</text>
+      <text x="1058" y="252" font-size="14" fill="#6b6864">Flowing watercolour</text>
+      <!-- Stroke preview -->
+      <g id="wet-preview" transform="translate(1138,218)" opacity="0.85">
+        <path d="M0,46 C30,10 90,78 200,36" fill="none" stroke="#60a5fa" stroke-width="28"
+              stroke-linecap="round" opacity="0.35"/>
+        <path d="M0,46 C30,10 90,78 200,36" fill="none" stroke="#2563EB" stroke-width="10"
+              stroke-linecap="round" opacity="0.80"/>
+      </g>
+    </g>
+
+    <!-- DRY card -->
+    <g id="card-dry">
+      <rect x="986" y="356" width="428" height="184" rx="44" fill="#edecea"/>
+      <text x="1058" y="430" font-size="22" font-weight="700" fill="#1a1a1a">Dry</text>
+      <text x="1058" y="460" font-size="14" fill="#6b6864">Textured dry brush</text>
+      <!-- Stroke preview -->
+      <g id="dry-preview" transform="translate(1138,418)" opacity="0.75">
+        <path d="M0,36 C40,12 120,60 200,28" fill="none" stroke="#4b4845" stroke-width="14"
+              stroke-linecap="round" stroke-dasharray="6 4"/>
+        <path d="M4,52 C44,30 124,68 196,44" fill="none" stroke="#4b4845" stroke-width="7"
+              stroke-linecap="round" stroke-dasharray="4 6" opacity="0.5"/>
+      </g>
+    </g>
+
+    <!-- SPLATTER card -->
+    <g id="card-splatter">
+      <rect x="986" y="564" width="428" height="184" rx="44" fill="#edecea"/>
+      <text x="1058" y="638" font-size="22" font-weight="700" fill="#1a1a1a">Splatter</text>
+      <text x="1058" y="668" font-size="14" fill="#6b6864">Random spray drops</text>
+      <!-- Drop preview -->
+      <g id="splatter-preview" transform="translate(1138,630)" opacity="0.80">
+        <circle cx="14"  cy="26"  r="5.5" fill="#E11D48"/>
+        <circle cx="46"  cy="10"  r="4"   fill="#DB2777"/>
+        <circle cx="74"  cy="38"  r="8"   fill="#E11D48"/>
+        <circle cx="104" cy="16"  r="5"   fill="#EA580C"/>
+        <circle cx="134" cy="44"  r="7"   fill="#E11D48"/>
+        <circle cx="162" cy="8"   r="4.5" fill="#DB2777"/>
+        <circle cx="192" cy="30"  r="9"   fill="#E11D48"/>
+        <circle cx="60"  cy="56"  r="3.5" fill="#DB2777"/>
+        <circle cx="120" cy="58"  r="4"   fill="#EA580C"/>
+        <circle cx="172" cy="54"  r="3"   fill="#E11D48"/>
+      </g>
+    </g>
+
+  </g><!-- /brushtype-col -->
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- COL 4 — BRUSH SIZE                                     -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <g id="brushsize-col" font-family="Inter, Segoe UI, Arial, sans-serif">
+
+    <!-- FINE card — ACTIVE  0.003 -->
+    <g id="card-fine">
+      <rect x="1466" y="148" width="428" height="108" rx="44" fill="#d8d6d1"/>
+      <text x="1536" y="210" font-size="20" font-weight="700" fill="#1a1a1a">Fine</text>
+      <text x="1536" y="233" font-size="12" fill="#6b6864">0.003</text>
+      <circle cx="1846" cy="202" r="2.5" fill="#1a1a1a"/>
+    </g>
+
+    <!-- SMALL card  0.008 -->
+    <g id="card-small">
+      <rect x="1466" y="272" width="428" height="108" rx="44" fill="#edecea"/>
+      <text x="1536" y="334" font-size="20" font-weight="700" fill="#1a1a1a">Small</text>
+      <text x="1536" y="357" font-size="12" fill="#6b6864">0.008</text>
+      <circle cx="1846" cy="326" r="5" fill="#4b4845"/>
+    </g>
+
+    <!-- MEDIUM card  0.018 -->
+    <g id="card-medium">
+      <rect x="1466" y="396" width="428" height="108" rx="44" fill="#edecea"/>
+      <text x="1536" y="458" font-size="20" font-weight="700" fill="#1a1a1a">Medium</text>
+      <text x="1536" y="481" font-size="12" fill="#6b6864">0.018</text>
+      <circle cx="1846" cy="450" r="10" fill="#4b4845"/>
+    </g>
+
+    <!-- LARGE card  0.040 -->
+    <g id="card-large">
+      <rect x="1466" y="520" width="428" height="108" rx="44" fill="#edecea"/>
+      <text x="1536" y="582" font-size="20" font-weight="700" fill="#1a1a1a">Large</text>
+      <text x="1536" y="605" font-size="12" fill="#6b6864">0.040</text>
+      <circle cx="1846" cy="574" r="20" fill="#4b4845"/>
+    </g>
+
+    <!-- XL card  0.085 -->
+    <g id="card-xl">
+      <rect x="1466" y="644" width="428" height="108" rx="44" fill="#edecea"/>
+      <text x="1536" y="706" font-size="20" font-weight="700" fill="#1a1a1a">XL</text>
+      <text x="1536" y="729" font-size="12" fill="#6b6864">0.085</text>
+      <circle cx="1846" cy="698" r="40" fill="#4b4845"/>
+    </g>
+
+  </g><!-- /brushsize-col -->
+
+  <!-- ─────────────────────────────────────────────────────── -->
+  <!-- BOTTOM BAR                                              -->
+  <!-- ─────────────────────────────────────────────────────── -->
+  <g id="bottom-bar">
+    <rect x="0" y="992" width="1920" height="88" fill="#edecea"/>
+    <rect x="0" y="992" width="1920" height="1"  fill="#d0cdc8"/>
+
+    <!-- Undo -->
+    <g id="btn-undo">
+      <rect x="64" y="1014" width="108" height="44" rx="22" fill="#d8d6d1"/>
+      <text x="118" y="1041" font-family="Inter, Segoe UI, Arial, sans-serif"
+            font-size="15" font-weight="600" fill="#4b4845" text-anchor="middle">Undo</text>
+    </g>
+
+    <!-- Clear -->
+    <g id="btn-clear">
+      <rect x="188" y="1014" width="108" height="44" rx="22" fill="#d8d6d1"/>
+      <text x="242" y="1041" font-family="Inter, Segoe UI, Arial, sans-serif"
+            font-size="15" font-weight="600" fill="#4b4845" text-anchor="middle">Clear</text>
+    </g>
+
+    <!-- Save -->
+    <g id="btn-save">
+      <rect x="1748" y="1014" width="120" height="44" rx="22" fill="#1a1a1a"/>
+      <text x="1808" y="1041" font-family="Inter, Segoe UI, Arial, sans-serif"
+            font-size="15" font-weight="600" fill="#ffffff" text-anchor="middle">Save</text>
+    </g>
+
+    <text x="960" y="1071" font-family="Inter, Segoe UI, Arial, sans-serif"
+          font-size="11" fill="#b5b2ad" text-anchor="middle">
+      1920 × 1080 · Kiosk Controls · Spatiality
+    </text>
+  </g>
+
+</svg>

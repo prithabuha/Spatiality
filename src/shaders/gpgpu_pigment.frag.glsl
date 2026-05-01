@@ -104,7 +104,9 @@ vec3 _kmAbsorb(vec3 baseRefl, vec3 pigRefl, float concentration) {
 
 vec3 _clampHueRange(vec3 hue) {
   float lum = _luma(hue);
-  float targetLum = clamp(lum, 0.10, 0.92);
+  // Floor at 0.022 allows genuine deep darks (heavy Prussian Blue, Ivory Black)
+  // while still preventing pure-black artefacts from numerical underflow.
+  float targetLum = clamp(lum, 0.022, 0.94);
   if (lum > 0.0005) hue *= targetLum / lum;
   return clamp(hue, 0.0, 1.0);
 }
@@ -124,12 +126,29 @@ void main() {
   // Per-pixel dryProgress: 0 = wet, 1 = locked
   float dryProgress = smoothstep(0.625, 1.0, dryTimer);
 
-  // ── BAKED LAYER LOCK ──────────────────────────────────────────────────────
-  // Lower threshold: lock at 0.82 instead of 0.98 so paint bakes earlier,
-  // preventing advection from sweeping colour away before it is fully locked.
-  bool fullyDried   = (dryProgress >= 0.82);
+  // ── PERMANENT LOCK — dried pixels are ALWAYS frozen ──────────────────────
+  //
+  // Removing the old `u_painting < 0.5` guard is the critical fix.
+  //
+  // Old behaviour (broken): when the user paints a SECOND stroke, u_painting
+  // was 1.0 globally, which bypassed this early-return for ALL pixels —
+  // including the already-dried first stroke.  With Section H (retention)
+  // also gated by u_painting < 0.5, dried pixels had zero protection and
+  // were gradually eroded by the simulation running on them, making the
+  // first stroke disappear the moment a second stroke was started.
+  //
+  // New behaviour (correct):
+  //   • Once a pixel's dryTimer causes dryProgress >= 0.68 it is PERMANENTLY
+  //     frozen — u_painting state is irrelevant.
+  //   • The ONLY way to "wake" a frozen pixel is for the velocity shader to
+  //     reset its dryTimer to 0 (which only happens when the brush physically
+  //     contacts that pixel).  Painting a new stroke elsewhere has zero effect
+  //     on already-dried pixels.
+  //   • This means layers accumulate correctly: first stroke stays visible as
+  //     a permanent stain while subsequent strokes are independently painted.
+  bool fullyDried   = (dryProgress >= 0.68);
   bool neverPainted = (water < 0.004 && dryTimer < 0.001);
-  if ((fullyDried || neverPainted) && u_painting < 0.5) {
+  if (fullyDried || neverPainted) {
     gl_FragColor = prev;
     return;
   }
@@ -186,7 +205,11 @@ void main() {
   // Halved constants vs original so paint does not spread thin enough to
   // expose the white paper beneath the stroke centre.
   // When not painting, halve again — only the active brush gets full spread.
-  float diffMul = (u_painting > 0.5) ? 1.0 : 0.50;
+  // Reduce passive diffusion (brush not active) so paint stays concentrated
+  // between strokes instead of spreading to invisible thinness.
+  // 0.06 passive diffusion (brush not active) — near-zero spread so the
+  // stain boundary stays tight and paint doesn't silently thin between strokes.
+  float diffMul = (u_painting > 0.5) ? 1.0 : 0.06;
   float D = (water * water * 0.022 + water * 0.004) * u_backrunStrength * diffMul;
   D *= (1.0 - dryProgress);
 
@@ -283,9 +306,11 @@ void main() {
   float granInfluence = water * u_granulationStrength;
   float dryGrainBoost = dryProgress * 0.60 * u_granulationStrength;
 
-  // Deposition: pigment INTO valleys, AWAY from peaks
+  // Deposition: pigment INTO valleys, AWAY from peaks.
+  // wipeFromPeak at 0.010 — minimal stripping so granulation adds texture
+  // without erasing colour.  depositValley unchanged for natural settling.
   float depositValley = valley * gran * newA * 0.080 * granInfluence;
-  float wipeFromPeak  = peak   * gran * newA * 0.055 * granInfluence;
+  float wipeFromPeak  = peak   * gran * newA * 0.010 * granInfluence;
   float drySettle     = valley * gran * newA * 0.035 * dryGrainBoost;
 
   newA = clamp(newA + depositValley - wipeFromPeak + drySettle, 0.0, 1.0);
@@ -403,7 +428,9 @@ void main() {
         outC = srcCol;
       }
 
-      float densityCeil = mix(0.62, 0.82, smoothstep(0.10, 0.55, water));
+      // Raised ceiling — allows heavy multi-layer applications to build up
+      // rich, dense stains as real watercolour does on cold-press paper.
+      float densityCeil = mix(0.80, 0.96, smoothstep(0.10, 0.55, water));
       float outA = min(compA, densityCeil);
       newRGB = clamp(outC * outA, vec3(0.0), vec3(1.0));
       newA   = clamp(outA, 0.0, 1.0);
@@ -443,9 +470,9 @@ void main() {
       }
     } else {
       // Soft retention: gentle floor while still wet — allows slow wet flow.
-      // Boost toward 1.0 as dryProgress rises so density cannot drain during
-      // the baking transition — baked colours stay as bold as when painted.
-      float retainWet = 0.992 + lock * 0.008 * u_retentionStrength;
+      // 0.9993/frame: ~0.5% loss over the full 0.8 s wet window.
+      // Colours hold their density until the baked layer takes over.
+      float retainWet = 0.9993 + lock * 0.0007 * u_retentionStrength;
       float retain    = mix(retainWet, 1.0, dryProgress * 0.92);
       retain          = min(retain, 1.0);
       newA = max(newA, prev.a * retain);
@@ -459,7 +486,8 @@ void main() {
     }
   }
 
-  newA = clamp(newA, 0.0, 0.88);
+  // Raised from 0.88 → 0.96 — allows genuine opaque staining on heavy applications
+  newA = clamp(newA, 0.0, 0.96);
   if (newA > 0.001) {
     vec3 hue = _clampHueRange(newRGB / newA);
     newRGB   = hue * newA;

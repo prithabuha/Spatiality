@@ -96,6 +96,7 @@ export class Scene {
         u_paintUvOffset:      { value: paintRect.offset.clone() },
         u_paintUvScale:       { value: paintRect.scale.clone() },
         u_substrateTexelSize: { value: this.gpgpu.substrateTexelSize },
+        u_paintTexelSize:     { value: this.gpgpu.paintTexelSize },
         u_paperTexScale:      { value: paperTexScale.clone() },
         u_borderBlur:         { value: 0.15 },
       },
@@ -498,6 +499,45 @@ export class Scene {
     };
     this._toonPass = new ShaderPass(ToonShader);
     this.composer.addPass(this._toonPass);
+  }
+
+  // ── 4-wall immersive projection ───────────────────────────────────────────────
+  // Positions the camera at the room centre looking at the requested wall.
+  // Call once after construction:  scene.setWallCamera('front')
+  //
+  // wall  : 'front' | 'back' | 'left' | 'right'
+  // fov   : vertical field-of-view in degrees (default 80 — adjust to match your
+  //         projector's throw ratio; wider = more of the wall is visible)
+  //
+  // Room constants (must match _buildRoom): W=28, H=12, D=30
+  setWallCamera (wall, fov = 80) {
+    const W = 28, H = 12, D = 30
+
+    // Eye sits at room centre, slightly below mid-height (feels natural)
+    const EYE_Y  = H * 0.44   // ≈ 5.3 units
+
+    const VIEWS = {
+      front: { target: new THREE.Vector3(  0,     EYE_Y, -D / 2) },
+      back:  { target: new THREE.Vector3(  0,     EYE_Y,  D / 2) },
+      left:  { target: new THREE.Vector3(-W / 2,  EYE_Y,  0    ) },
+      right: { target: new THREE.Vector3( W / 2,  EYE_Y,  0    ) },
+    }
+
+    const view = VIEWS[wall]
+    if (!view) {
+      console.warn(`[Scene] Unknown wall "${wall}". Use front/back/left/right.`)
+      return
+    }
+
+    this.camera.position.set(0, EYE_Y, 0)
+    this.camera.lookAt(view.target)
+    this.camera.fov = fov
+    this.camera.updateProjectionMatrix()
+
+    // Remove fog — makes distant walls in other views look faded
+    this.scene.fog = null
+
+    console.info(`[Scene] Wall camera: ${wall}  fov=${fov}°  eye=(0, ${EYE_Y.toFixed(1)}, 0)`)
   }
 
   _onResize() {

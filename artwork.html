@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spatiality · Your Artwork</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100dvh;
+      background: #e8e6e1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 20px 40px;
+      font-family: 'Quicksand', sans-serif;
+      gap: 24px;
+    }
+
+    /* ── Logo ── */
+    .logo {
+      font-family: 'Fredoka One', cursive;
+      font-size: 36px;
+      letter-spacing: 1px;
+    }
+    .logo span:nth-child(1)  { color: #E02A3A }
+    .logo span:nth-child(2)  { color: #1848C8 }
+    .logo span:nth-child(3)  { color: #E09A00 }
+    .logo span:nth-child(4)  { color: #12966A }
+    .logo span:nth-child(5)  { color: #E02A3A }
+    .logo span:nth-child(6)  { color: #1848C8 }
+    .logo span:nth-child(7)  { color: #E09A00 }
+    .logo span:nth-child(8)  { color: #12966A }
+    .logo span:nth-child(9)  { color: #E02A3A }
+    .logo span:nth-child(10) { color: #1848C8 }
+
+    /* ── Gallery frame ── */
+    .frame-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      max-width: 520px;
+    }
+
+    .frame {
+      background: #251c10;
+      padding: 14px;
+      border-radius: 6px;
+      box-shadow:
+        0 0 0 3px  #C9A84C,
+        0 0 0 6px  #251c10,
+        0 0 0 14px #C9A84C,
+        0 0 0 16px #251c10,
+        12px 12px 32px rgba(0,0,0,0.28),
+        -4px -4px 18px rgba(255,255,255,0.52);
+      width: 100%;
+    }
+
+    .frame img {
+      display: block;
+      width: 100%;
+      border-radius: 3px;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      background: #edecea;
+    }
+
+    .byline {
+      font-family: 'Fredoka One', cursive;
+      font-size: 22px;
+      color: #58534e;
+      text-align: center;
+    }
+
+    /* ── Buttons ── */
+    .btn-save {
+      font-family: 'Fredoka One', cursive;
+      font-size: 22px;
+      color: #fff;
+      background: #E02A3A;
+      border: none;
+      border-radius: 999px;
+      padding: 16px 48px;
+      text-decoration: none;
+      display: inline-block;
+      box-shadow: 0 6px 24px rgba(224,42,58,0.38);
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-save:active {
+      transform: scale(0.96);
+      box-shadow: 0 3px 12px rgba(224,42,58,0.38);
+    }
+
+    .ios-hint {
+      font-size: 15px;
+      font-weight: 600;
+      color: #9a9590;
+      text-align: center;
+    }
+
+    /* ── Loading / error states ── */
+    .state-text {
+      font-family: 'Fredoka One', cursive;
+      font-size: 28px;
+      text-align: center;
+    }
+    .state-text.loading { color: #E02A3A; animation: pulse 1.4s ease-in-out infinite; }
+    .state-text.error   { color: #9a9590; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; }
+      50%       { opacity: 1;   }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Logo -->
+  <div class="logo" aria-label="Spatiality">
+    <span>S</span><span>p</span><span>a</span><span>t</span><span>i</span><span>a</span><span>l</span><span>i</span><span>t</span><span>y</span>
+  </div>
+
+  <!-- Loading state -->
+  <p id="state-loading" class="state-text loading">Loading your masterpiece…</p>
+
+  <!-- Artwork (hidden until loaded) -->
+  <div id="content" class="frame-wrap" style="display:none">
+    <div class="frame">
+      <img id="artwork-img" src="" alt="Your Spatiality artwork" />
+    </div>
+    <p class="byline" id="byline"></p>
+    <a id="btn-save" class="btn-save" download="spatiality-artwork.png">💾 Save to Camera Roll</a>
+    <p class="ios-hint">On iPhone: tap &amp; hold the image → Save to Photos</p>
+  </div>
+
+  <!-- Error state -->
+  <p id="state-error" class="state-text error" style="display:none">
+    Artwork not found 😢<br>
+    <span style="font-family:'Quicksand',sans-serif;font-size:18px;font-weight:600">
+      Ask the kiosk team for help
+    </span>
+  </p>
+
+  <script>
+    const params = new URLSearchParams(location.search)
+    const id     = params.get('id')
+    const origin = location.origin
+
+    if (!id) {
+      show('error')
+    } else {
+      const imgUrl  = `${origin}/Spatiality/artworks/${id}.png`
+      const metaUrl = `${origin}/Spatiality/artworks/${id}.json`
+      const img     = document.getElementById('artwork-img')
+
+      img.onload = () => {
+        // Wire up download link
+        document.getElementById('btn-save').href = imgUrl
+
+        // Try to load artist name from metadata
+        fetch(metaUrl)
+          .then(r => r.ok ? r.json() : null)
+          .then(meta => {
+            const name = meta?.artistName?.trim()
+            const byline = document.getElementById('byline')
+            byline.textContent = name ? `by ${name}` : '✦ Spatiality'
+            if (name) document.title = `${name}'s Spatiality Artwork`
+          })
+          .catch(() => {
+            document.getElementById('byline').textContent = '✦ Spatiality'
+          })
+
+        show('content')
+      }
+
+      img.onerror = () => show('error')
+      img.src = imgUrl
+    }
+
+    function show(id) {
+      document.getElementById('state-loading').style.display = 'none'
+      document.getElementById('content').style.display       = id === 'content' ? 'flex' : 'none'
+      document.getElementById('state-error').style.display   = id === 'error'   ? 'block': 'none'
+    }
+  </script>
+
+</body>
+</html>

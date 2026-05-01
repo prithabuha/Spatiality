@@ -107,7 +107,7 @@ html, body {
 /* ── Hint chip ──────────────────────────────────────────────────────────── */
 #hint-chip {
   position: absolute;
-  bottom: 175px;
+  bottom: 32px;
   left: 50%; transform: translateX(-50%);
   background: var(--p-bg);
   border: none;

@@ -18,69 +18,53 @@ import * as THREE            from 'three';
 import { GPGPUWatercolor }   from './GPGPUWatercolor.js';
 import { Scene }             from './Scene.js';
 import { HandTracker }       from './HandTracker.js';
-import { DiegeticUI }        from './DiegeticUI.js';
 import { WaterCursor }       from './WaterCursor.js';
 import { PaperContainer }    from './PaperContainer.js';
+import { MadMapperRelay }    from './madmapper_relay.js';
 
 // ── Paper surface init (grain overlay + warm-white background) ───────────────
 const _paper = new PaperContainer();
 
 // ── DOM ──────────────────────────────────────────────────────────────────────
-const canvas       = document.getElementById('three-canvas');
-const webcamBg     = document.getElementById('webcam-bg');
-const handOverlay  = document.getElementById('hand-overlay');
-const hintChip     = document.getElementById('hint-chip');
-const fingerCursor = document.getElementById('finger-cursor');
-const brushLabToggle = document.getElementById('brush-lab-toggle');
-const brushLab = document.getElementById('brush-lab');
+const canvas      = document.getElementById('three-canvas');
+const webcamBg    = document.getElementById('webcam-bg');
+const handOverlay = document.getElementById('hand-overlay');
+const hintChip    = document.getElementById('hint-chip');
 
-// ── God Mode elements ─────────────────────────────────────────────────────────
+// ── God Mode elements (dev-only, toggled with G key) ─────────────────────────
 const godModeToggle = document.getElementById('god-mode-toggle');
 const godModePanel  = document.getElementById('god-mode');
-const gmBrushType   = document.getElementById('gm-brushtype');  // select, not range
+const gmBrushType   = document.getElementById('gm-brushtype');
 const gmSliders = {
-  size:      document.getElementById('gm-size'),
-  pigment:   document.getElementById('gm-pigment'),
-  splat:     document.getElementById('gm-splat'),
-  wetness:   document.getElementById('gm-wetness'),
-  diffusion: document.getElementById('gm-diffusion'),
-  mix:       document.getElementById('gm-mix'),
-  gravity:   document.getElementById('gm-gravity'),
-  wetwindow: document.getElementById('gm-wetwindow'),
-  evap:      document.getElementById('gm-evap'),
-  edge:      document.getElementById('gm-edge'),
-  grain:     document.getElementById('gm-grain'),
+  size:       document.getElementById('gm-size'),
+  pigment:    document.getElementById('gm-pigment'),
+  splat:      document.getElementById('gm-splat'),
+  wetness:    document.getElementById('gm-wetness'),
+  diffusion:  document.getElementById('gm-diffusion'),
+  mix:        document.getElementById('gm-mix'),
+  gravity:    document.getElementById('gm-gravity'),
+  wetwindow:  document.getElementById('gm-wetwindow'),
+  evap:       document.getElementById('gm-evap'),
+  edge:       document.getElementById('gm-edge'),
+  grain:      document.getElementById('gm-grain'),
   backrun:    document.getElementById('gm-backrun'),
   borderblur: document.getElementById('gm-borderblur'),
 };
 const gmValues = {
-  size:      document.getElementById('gv-size'),
-  pigment:   document.getElementById('gv-pigment'),
-  splat:     document.getElementById('gv-splat'),
-  wetness:   document.getElementById('gv-wetness'),
-  diffusion: document.getElementById('gv-diffusion'),
-  mix:       document.getElementById('gv-mix'),
-  gravity:   document.getElementById('gv-gravity'),
-  wetwindow: document.getElementById('gv-wetwindow'),
-  evap:      document.getElementById('gv-evap'),
-  edge:      document.getElementById('gv-edge'),
-  grain:     document.getElementById('gv-grain'),
+  size:       document.getElementById('gv-size'),
+  pigment:    document.getElementById('gv-pigment'),
+  splat:      document.getElementById('gv-splat'),
+  wetness:    document.getElementById('gv-wetness'),
+  diffusion:  document.getElementById('gv-diffusion'),
+  mix:        document.getElementById('gv-mix'),
+  gravity:    document.getElementById('gv-gravity'),
+  wetwindow:  document.getElementById('gv-wetwindow'),
+  evap:       document.getElementById('gv-evap'),
+  edge:       document.getElementById('gv-edge'),
+  grain:      document.getElementById('gv-grain'),
   backrun:    document.getElementById('gv-backrun'),
   borderblur: document.getElementById('gv-borderblur'),
 };
-const brushPresetSelect = document.getElementById('brush-preset');
-const brushColorInput = document.getElementById('brush-color');
-const brushSizeInput = document.getElementById('brush-size');
-const brushWaterInput = document.getElementById('brush-water');
-const brushPigmentInput = document.getElementById('brush-pigment');
-const brushMixInput = document.getElementById('brush-mix');
-const brushSmoothingInput = document.getElementById('brush-smoothing');
-const brushProfileLabel = document.getElementById('brush-profile-label');
-const brushSizeValue = document.getElementById('brush-size-value');
-const brushWaterValue = document.getElementById('brush-water-value');
-const brushPigmentValue = document.getElementById('brush-pigment-value');
-const brushMixValue = document.getElementById('brush-mix-value');
-const brushSmoothingValue = document.getElementById('brush-smoothing-value');
 
 function getPerformanceProfile() {
   const profiles = {
@@ -109,6 +93,8 @@ const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: perfProfile.antialias,
   powerPreference: 'high-performance',
+  // Required for MadMapper relay — lets readPixels read back the rendered frame
+  preserveDrawingBuffer: true,
 });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, perfProfile.pixelRatioCap));
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -117,7 +103,158 @@ canvas.style.touchAction = 'none';
 // ── GPGPU + Scene ─────────────────────────────────────────────────────────────
 const gpgpu   = new GPGPUWatercolor(renderer, { simResolution: perfProfile.simResolution });
 const scene   = new Scene(renderer, gpgpu);
+
+// ── 4-wall projection: read ?wall=front|back|left|right  &  ?fov=80 ──────────
+// Each projector opens this page with a different ?wall= param.
+// Omit ?wall= for the default single-display / development view.
+const _urlParams  = new URLSearchParams(window.location.search)
+const _wallParam  = _urlParams.get('wall')     // 'front' | 'back' | 'left' | 'right' | null
+const _fovParam   = parseFloat(_urlParams.get('fov') || '80')
+const _isWallView = Boolean(_wallParam)        // true on wall projectors
+
+if (_isWallView) {
+  scene.setWallCamera(_wallParam, _fovParam)
+  // Hide hand-overlay UI elements — not needed on secondary wall displays
+  if (webcamBg)    webcamBg.style.display    = 'none'
+  if (handOverlay) handOverlay.style.display = 'none'
+  if (hintChip)    hintChip.style.display    = 'none'
+  console.info(`[4-wall] Wall view: ${_wallParam}  fov=${_fovParam}°`)
+}
+
 const tracker = new HandTracker(webcamBg, handOverlay);
+
+// ── Camera permission gate ────────────────────────────────────────────────────
+// Shows a full-screen "Allow Camera" button so the browser permission dialog is
+// always triggered from a real user gesture.  Dismissed automatically once the
+// hand tracker reports it's ready (camera stream running).
+;(function _cameraGate() {
+  const gate    = document.getElementById('camera-gate')
+  const btn     = document.getElementById('btn-allow-camera')
+  const status  = document.getElementById('camera-gate-status')
+  const welcome = document.getElementById('ar-welcome')
+  if (!gate || !btn) return
+
+  // Wall views don't need camera — skip gate immediately
+  if (_isWallView) { gate.style.display = 'none'; _showWelcome(); return }
+
+  function _showWelcome() {
+    if (welcome) { welcome.style.display = 'flex'; requestAnimationFrame(() => welcome.classList.remove('hidden')) }
+  }
+  function _dismissGate() {
+    gate.classList.add('hidden')
+    setTimeout(() => { gate.style.display = 'none' }, 700)
+    _showWelcome()
+  }
+
+  // ── Phase-based button flow ──────────────────────────────────────────────
+  // Phase 'allow'  → button triggers browser permission dialog
+  // Phase 'select' → multiple cameras found; user picks one, button confirms
+  // Phase 'start'  → single camera; start immediately after permission
+  let _phase          = 'allow'
+  let _chosenDeviceId = null
+
+  // Build camera selector (idempotent — only inserts once)
+  function _buildCameraSelect(cameras) {
+    if (document.getElementById('cam-select')) return   // already built
+    const inner = gate.querySelector('.ar-inner')
+
+    const label = document.createElement('p')
+    label.id = 'cam-select-label'
+    label.style.cssText = 'font-size:15px;color:#7a746e;text-align:center;margin:0'
+    label.textContent   = 'Multiple cameras — pick the one facing the room:'
+    inner.insertBefore(label, btn)
+
+    const sel = document.createElement('select')
+    sel.id = 'cam-select'
+    sel.style.cssText = [
+      "font-family:'Quicksand',sans-serif", 'font-size:16px', 'font-weight:600',
+      'border:2px solid #e0dbd4', 'border-radius:12px', 'padding:10px 16px',
+      'background:#fff', 'color:#3a3530', 'cursor:pointer',
+      'width:100%', 'max-width:340px',
+    ].join(';')
+    cameras.forEach((cam, i) => {
+      const opt       = document.createElement('option')
+      opt.value       = cam.deviceId
+      opt.textContent = cam.label || `Camera ${i + 1}`
+      sel.appendChild(opt)
+    })
+    _chosenDeviceId = cameras[0].deviceId
+    sel.addEventListener('change', () => { _chosenDeviceId = sel.value })
+    inner.insertBefore(sel, btn)
+  }
+
+  // ── Button click handler ─────────────────────────────────────────────────
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+
+    // ── Phase: confirm camera choice and start ───────────────────────────
+    if (_phase === 'select') {
+      btn.textContent = 'Starting…'
+      if (status) { status.textContent = '✓ Starting hand tracking…'; status.className = 'ok' }
+      try {
+        await tracker.startCamera(_chosenDeviceId)
+        _dismissGate()
+      } catch (err) {
+        btn.disabled   = false
+        btn.textContent = 'Try Again →'
+        if (status) status.textContent = `⚠️ ${err.message || err.name}`
+      }
+      return
+    }
+
+    // ── Phase: request camera permission ────────────────────────────────
+    btn.textContent = 'Opening camera…'
+    if (status) { status.textContent = ''; status.className = '' }
+
+    try {
+      // Step 1: trigger permission dialog (needs user gesture)
+      const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      tempStream.getTracks().forEach(t => t.stop())   // release immediately
+
+      // Step 2: enumerate — labels are available now permission is granted
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const cameras = devices.filter(d => d.kind === 'videoinput')
+
+      if (cameras.length >= 2) {
+        // Multiple cameras — let user pick before starting tracker
+        _buildCameraSelect(cameras)
+        _phase = 'select'
+        btn.disabled    = false
+        btn.textContent = 'Use This Camera →'
+        if (status) { status.textContent = '✓ Pick your camera, then tap the button'; status.className = 'ok' }
+        // Return here — wait for second click in 'select' phase
+      } else {
+        // Single camera — start immediately
+        if (cameras.length === 1) _chosenDeviceId = cameras[0].deviceId
+        if (status) { status.textContent = '✓ Camera ready — starting…'; status.className = 'ok' }
+        await tracker.startCamera(_chosenDeviceId)
+        _dismissGate()
+      }
+    } catch (err) {
+      _phase          = 'allow'
+      btn.disabled    = false
+      btn.textContent = 'Try Again →'
+      if (status) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          status.textContent = '🔒 Blocked — click the 🔒 icon in the address bar → Camera → Allow'
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          status.textContent = '📷 No camera found — you can still paint with mouse'
+          setTimeout(_dismissGate, 2200)
+        } else {
+          status.textContent = `⚠️ ${err.message || err.name}`
+        }
+      }
+    }
+  })
+
+  // Auto-dismiss when HandTracker already initialised (permission pre-granted)
+  const _check = setInterval(() => {
+    if (tracker.ready) { clearInterval(_check); _dismissGate() }
+  }, 500)
+})()
+
+// ── MadMapper relay (off by default — add ?madmapper=1 to URL to activate) ──
+const relay = new MadMapperRelay(renderer, scene.scene, scene.camera)
 
 console.info(
   `[Perf] profile=${perfProfile.name}, sim=${perfProfile.simResolution}, pixelRatioCap=${perfProfile.pixelRatioCap}`
@@ -126,17 +263,8 @@ console.info(
 // ── Painting state ────────────────────────────────────────────────────────────
 let activeColor = new THREE.Color(0.85, 0.19, 0.38);  // start Quinacridone Rose
 
-// ── Diegetic UI + Water cursor (after activeColor is defined) ─────────────────
-scene.setBucketsVisible(false);   // replace 3D orbs with HTML palette
-
-const diegeticUI = new DiegeticUI({
-  onColorSelect: ({ r, g, b, key }) => {
-    activeColor = new THREE.Color(r, g, b);
-    if (brushColorInput) brushColorInput.value = '#' + activeColor.getHexString();
-    waterCursor.setColor(r, g, b);
-    diegeticUI.setActiveKey(key);
-  },
-});
+// ── Water cursor (color now driven by kiosk BroadcastChannel) ────────────────
+scene.setBucketsVisible(false);
 
 const waterCursor = new WaterCursor();
 waterCursor.setColor(activeColor.r, activeColor.g, activeColor.b);
@@ -235,27 +363,21 @@ let lastPaintPoint = null;
 let lastPaintTs = performance.now();
 let wasPainting = false;
 
-function to2(v) {
-  return Number(v).toFixed(2);
+// ── Idle hint: "Take a breath" after 5 s of no painting ─────────────────────
+let _idleTimer = null
+const IDLE_HINT_DELAY = 5000   // ms
+
+function _resetIdleTimer() {
+  clearTimeout(_idleTimer)
+  _idleTimer = setTimeout(() => {
+    flashHint('✦  Take a breath…')
+  }, IDLE_HINT_DELAY)
+}
+function _cancelIdleTimer() {
+  clearTimeout(_idleTimer)
 }
 
-function syncBrushUI() {
-  if (!brushProfileLabel) return;
-  brushProfileLabel.textContent = `Perf ${perfProfile.name}`;
-  if (brushPresetSelect) brushPresetSelect.value = activePresetKey;
-  if (brushColorInput) brushColorInput.value = '#' + activeColor.getHexString();
-  if (brushSizeInput) brushSizeInput.value = brushState.size.toString();
-  if (brushWaterInput) brushWaterInput.value = brushState.water.toString();
-  if (brushPigmentInput) brushPigmentInput.value = brushState.pigment.toString();
-  if (brushMixInput) brushMixInput.value = brushState.colorMix.toString();
-  if (brushSmoothingInput) brushSmoothingInput.value = brushState.smoothing.toString();
-
-  if (brushSizeValue) brushSizeValue.textContent = to2(brushState.size);
-  if (brushWaterValue) brushWaterValue.textContent = to2(brushState.water);
-  if (brushPigmentValue) brushPigmentValue.textContent = to2(brushState.pigment);
-  if (brushMixValue) brushMixValue.textContent = to2(brushState.colorMix);
-  if (brushSmoothingValue) brushSmoothingValue.textContent = to2(brushState.smoothing);
-}
+function to2(v) { return Number(v).toFixed(2); }
 
 function resetStrokeState() {
   lastUV = null;
@@ -268,65 +390,7 @@ function applyPreset(key) {
   if (!brushPresets[key]) return;
   activePresetKey = key;
   Object.assign(brushState, brushPresets[key]);
-  syncBrushUI();
 }
-
-function bindBrushLab() {
-  if (!brushLab || !brushLabToggle) return;
-
-  brushLabToggle.addEventListener('click', () => {
-    brushLab.classList.toggle('is-collapsed');
-  });
-
-  brushPresetSelect?.addEventListener('change', (e) => {
-    applyPreset(e.target.value);
-    flashHint(`${brushState.label} preset`);
-  });
-
-  brushColorInput?.addEventListener('input', (e) => {
-    activeColor.set(e.target.value);
-  });
-
-  brushSizeInput?.addEventListener('input', (e) => {
-    brushState.size = Number(e.target.value);
-    if (brushSizeValue) brushSizeValue.textContent = to2(brushState.size);
-  });
-
-  brushWaterInput?.addEventListener('input', (e) => {
-    brushState.water = Number(e.target.value);
-    if (brushWaterValue) brushWaterValue.textContent = to2(brushState.water);
-  });
-
-  brushPigmentInput?.addEventListener('input', (e) => {
-    brushState.pigment = Number(e.target.value);
-    if (brushPigmentValue) brushPigmentValue.textContent = to2(brushState.pigment);
-  });
-
-  brushMixInput?.addEventListener('input', (e) => {
-    brushState.colorMix = Number(e.target.value);
-    if (brushMixValue) brushMixValue.textContent = to2(brushState.colorMix);
-  });
-
-  brushSmoothingInput?.addEventListener('input', (e) => {
-    brushState.smoothing = Number(e.target.value);
-    if (brushSmoothingValue) brushSmoothingValue.textContent = to2(brushState.smoothing);
-  });
-
-  window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() === 'b') {
-      brushLab.classList.toggle('is-collapsed');
-    }
-    if (e.key === '1') applyPreset('fresco');
-    if (e.key === '2') applyPreset('rebelle');
-    if (e.key === '3') applyPreset('wash');
-    if (e.key === '4') applyPreset('dry');
-    if (e.key === '5') applyPreset('splash');
-  });
-
-  syncBrushUI();
-}
-
-bindBrushLab();
 
 // ── God Mode binding ──────────────────────────────────────────────────────────
 const godDefaults = {
@@ -509,29 +573,142 @@ function moveCursor(normX, normY, active) {
   waterCursor.show();
 }
 
+// ── Kiosk WebSocket receiver  (auto-reconnecting) ─────────────────────────────
+const arWelcome = document.getElementById('ar-welcome');
+const arEnd     = document.getElementById('ar-end');
+
+const _wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+let _kioskWs         = null;
+let _kioskWsTimer    = null;
+
+// Extracted as a named function so it can be re-attached on every reconnect
+function _onArWsMessage({ data: raw }) {
+  let data;
+  try { data = JSON.parse(raw); } catch { return; }
+
+  switch (data.type) {
+
+    case 'start':
+      if (arWelcome) { arWelcome.classList.add('hidden'); setTimeout(() => { arWelcome.style.display = 'none'; }, 650); }
+      if (arEnd)     { arEnd.style.display = 'none'; arEnd.classList.add('hidden'); }
+      break;
+
+    case 'color': {
+      const { r, g, b } = data;
+      activeColor = new THREE.Color(r, g, b);
+      waterCursor.setColor(r, g, b);
+      playColorPop();
+      break;
+    }
+
+    case 'water':
+      brushState.water = THREE.MathUtils.clamp(data.value, 0.08, 0.90);
+      break;
+
+    case 'brushSize':
+      brushState.size = THREE.MathUtils.clamp(data.value, 0.003, 0.090);
+      break;
+
+    case 'brushType':
+      brushState.brushType = data.value;
+      if (gmBrushType) gmBrushType.value = String(data.value);
+      break;
+
+    case 'preset':
+      applyPreset(data.key);
+      flashHint(`${brushState.label ?? data.key} ✦`);
+      break;
+
+    case 'end':
+      if (arEnd) { arEnd.style.display = 'flex'; requestAnimationFrame(() => arEnd.classList.remove('hidden')); }
+      break;
+
+    // ── Snapshot: capture canvas → save to server → relay artwork URL back ────
+    case 'snapshot': {
+      const artistName = data.artistName ?? ''
+      // toDataURL works because preserveDrawingBuffer: true is set on the renderer
+      const imageData = renderer.domElement.toDataURL('image/png')
+      fetch('/api/save-artwork', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ imageData, artistName }),
+      })
+        .then(r => r.json())
+        .then(({ id, url }) => {
+          const origin    = `${location.protocol}//${location.host}`
+          const imageUrl  = `${origin}${url}`
+          const viewerUrl = `${origin}/Spatiality/artwork.html?id=${id}`
+          // Relay back to the kiosk so it can show the frame + generate QR
+          if (_kioskWs && _kioskWs.readyState === WebSocket.OPEN) {
+            _kioskWs.send(JSON.stringify({ type: 'artwork', id, imageUrl, viewerUrl, artistName }))
+          }
+          console.info(`[AR] Artwork saved → ${imageUrl}`)
+        })
+        .catch(e => console.error('[AR] Snapshot save failed:', e))
+      break
+    }
+
+    // ── 4-wall sync: apply stroke from the primary (hand-tracked) display ─────
+    case 'wallStroke': {
+      if (!_isWallView) break
+      const { points, opts: o } = data
+      const strokeColor = new THREE.Color(o.colorR, o.colorG, o.colorB)
+      const strokeOpts = {
+        color: strokeColor, waterAmount: o.waterAmount, pigmentLoad: o.pigmentLoad,
+        brushSize: o.brushSize, brushType: o.brushType, flowVelocity: o.flowVelocity,
+        diffusionRate: o.diffusionRate, colorMix: o.colorMix,
+        edgeStrength: o.edgeStrength, granulationStrength: o.granulationStrength,
+        backrunStrength: o.backrunStrength, retentionStrength: o.retentionStrength,
+        wetCanvas: true,
+      }
+      gpgpu.notifyStroke()
+      for (const { u, v } of points) gpgpu.paint(u, v, strokeOpts)
+      break
+    }
+
+    // ── 4-wall sync: clear ────────────────────────────────────────────────────
+    case 'wallClear':
+      if (_isWallView) gpgpu.clear()
+      break
+
+    // ── Reset: new visitor — clear canvas + return AR to welcome ──────────────
+    case 'reset':
+      resetStrokeState()
+      gpgpu.clear()
+      if (arEnd)     { arEnd.classList.add('hidden'); setTimeout(() => { arEnd.style.display = 'none'; }, 650) }
+      if (arWelcome) { arWelcome.style.display = 'flex'; requestAnimationFrame(() => arWelcome.classList.remove('hidden')) }
+      if (!_isWallView && _kioskWs && _kioskWs.readyState === WebSocket.OPEN) {
+        _kioskWs.send(JSON.stringify({ type: 'wallClear' }))
+      }
+      break
+
+    // ── Clear: wipe canvas only (Paint Again — no overlay change) ─────────────
+    case 'clear':
+      resetStrokeState()
+      gpgpu.clear()
+      if (!_isWallView && _kioskWs && _kioskWs.readyState === WebSocket.OPEN) {
+        _kioskWs.send(JSON.stringify({ type: 'wallClear' }))
+      }
+      break
+  }
+}
+
+function _connectArWS() {
+  clearTimeout(_kioskWsTimer)
+  _kioskWs = new WebSocket(`${_wsProto}://${location.host}/kiosk-ws`)
+  _kioskWs.addEventListener('open',    () => console.log('[AR] WS connected'))
+  _kioskWs.addEventListener('error',   e  => console.warn('[AR] WS error', e))
+  _kioskWs.addEventListener('close',   () => {
+    console.warn('[AR] WS closed — reconnecting in 2 s…')
+    _kioskWsTimer = setTimeout(_connectArWS, 2000)
+  })
+  _kioskWs.addEventListener('message', _onArWsMessage)
+}
+
+_connectArWS();
+
 // ── Core paint dispatch ───────────────────────────────────────────────────────
 function doPaint(normX, normY, input = {}) {
-  // 1. Ink-well dip check — finger enters palette well → switch colour
-  const dipHit = diegeticUI.checkDip(normX, normY);
-  if (dipHit) {
-    const { r, g, b, key, name } = dipHit;
-    const newColor = new THREE.Color(r, g, b);
-    if (newColor.getHexString() !== activeColor.getHexString()) {
-      activeColor = newColor;
-      if (brushColorInput) brushColorInput.value = '#' + activeColor.getHexString();
-      waterCursor.setColor(r, g, b);
-      waterCursor.triggerDip();
-      diegeticUI.triggerDipRipple(key);
-      const floorHit = scene.getHitUV(normX, Math.min(normY + 0.06, 0.99));
-      if (floorHit) triggerBurst(floorHit.u, floorHit.v, activeColor);
-      playColorPop();
-      haptic([25, 10, 25]);
-      flashHint(`${name} paint! ✦`);
-    }
-    resetStrokeState();
-    return;
-  }
-
   const now = input.time ?? performance.now();
   const pressure = THREE.MathUtils.clamp(input.pressure ?? 0.58, 0.08, 1.0);
   const smoothing = THREE.MathUtils.clamp(input.smoothing ?? brushState.smoothing, 0.0, 0.90);
@@ -551,7 +728,7 @@ function doPaint(normX, normY, input = {}) {
   lastPaintPoint = { x: paintX, y: paintY };
   lastPaintTs = now;
 
-  // 2. Raycast onto paintable walls / floor
+  // Raycast onto paintable walls / floor
   const hit = scene.getHitUV(paintX, paintY);
   if (!hit) {
     resetStrokeState();
@@ -648,23 +825,52 @@ function doPaint(normX, normY, input = {}) {
   // Notify drying engine: this frame has a live stroke — resets global clock
   gpgpu.notifyStroke();
 
+  // ── Collect interpolated UV points for this stroke segment ─────────────────
+  const strokePoints = []   // [{ u, v }] — sent to other wall instances
+
   if (lastUV && lastSurface === hit.surfaceId) {
     const dist = Math.hypot(hit.u - lastUV.u, hit.v - lastUV.v);
-    // Step every ~40% of the brush radius so strokes are gapless even at speed.
-    // Small brushes automatically get more steps than large ones.
-    // Max 20 GPU pairs per frame — fast fingers can cover the full wall without lag.
     const stepsNeeded = dist < 0.001 ? 1 : Math.ceil(dist / (dynamicSize * 0.40));
     const steps = THREE.MathUtils.clamp(stepsNeeded, 1, 20);
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
-      gpgpu.paint(
-        lastUV.u + (hit.u - lastUV.u) * t,
-        lastUV.v + (hit.v - lastUV.v) * t,
-        opts
-      );
+      const u = lastUV.u + (hit.u - lastUV.u) * t
+      const v = lastUV.v + (hit.v - lastUV.v) * t
+      gpgpu.paint(u, v, opts);
+      strokePoints.push({ u, v })
     }
   } else {
     gpgpu.paint(hit.u, hit.v, opts);
+    strokePoints.push({ u: hit.u, v: hit.v })
+  }
+
+  // ── Broadcast stroke to all other wall displays via WebSocket ───────────────
+  // Secondary wall instances receive this and apply the same paint to their
+  // local GPGPU so all 4 walls stay perfectly in sync.
+  if (!_isWallView && _kioskWs && _kioskWs.readyState === WebSocket.OPEN) {
+    _kioskWs.send(JSON.stringify({
+      type:       'wallStroke',
+      surfaceId:  hit.surfaceId,
+      points:     strokePoints,
+      opts: {
+        waterAmount:         opts.waterAmount,
+        pigmentLoad:         opts.pigmentLoad,
+        brushSize:           opts.brushSize,
+        brushType:           opts.brushType,
+        flowVelocity:        opts.flowVelocity,
+        diffusionRate:       opts.diffusionRate,
+        colorMix:            opts.colorMix,
+        edgeStrength:        opts.edgeStrength,
+        granulationStrength: opts.granulationStrength,
+        backrunStrength:     opts.backrunStrength,
+        retentionStrength:   opts.retentionStrength,
+        wetCanvas:           true,
+        // color as plain RGB so it survives JSON
+        colorR: activeColor.r,
+        colorG: activeColor.g,
+        colorB: activeColor.b,
+      },
+    }))
   }
 
   lastUV = { u: hit.u, v: hit.v };
@@ -672,13 +878,16 @@ function doPaint(normX, normY, input = {}) {
 }
 
 // ── Hint flash ────────────────────────────────────────────────────────────────
-function flashHint(msg) {
-  if (!hintChip) return;
-  hintChip.textContent = msg;
-  clearTimeout(flashHint._t);
-  flashHint._t = setTimeout(() => {
-    hintChip.textContent = 'Hold index finger 2 s to paint  ·  👍 Thumbs up 5 s to clear the canvas ✦';
-  }, 1800);
+const HINT_DEFAULT = '☝️  Point to paint  ·  👍  Hold 3 s to clear ✦'
+
+function flashHint(msg, { force = false } = {}) {
+  if (!hintChip) return
+  // Never interrupt the user with notifications while they're actively painting.
+  // force:true is reserved for clear/reset events that the user intentionally triggered.
+  if (wasPainting && !force) return
+  hintChip.textContent = msg
+  clearTimeout(flashHint._t)
+  flashHint._t = setTimeout(() => { hintChip.textContent = HINT_DEFAULT }, 2200)
 }
 
 // ── Mouse / touch fallback ────────────────────────────────────────────────────
@@ -700,6 +909,7 @@ canvas.addEventListener('pointerdown', e => {
   activePointerId = e.pointerId;
   mouseDown = true;
   resetStrokeState();
+  _cancelIdleTimer()   // mouse/touch paint started — cancel idle hint
   try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
   doPaint(
     e.clientX / window.innerWidth,
@@ -720,6 +930,7 @@ canvas.addEventListener('pointerup', e => {
   mouseDown = false;
   activePointerId = null;
   resetStrokeState();
+  _resetIdleTimer()    // mouse/touch lifted — start 5 s idle countdown
   waterCursor.hide();
 });
 canvas.addEventListener('pointercancel', e => {
@@ -727,6 +938,7 @@ canvas.addEventListener('pointercancel', e => {
   mouseDown = false;
   activePointerId = null;
   resetStrokeState();
+  _resetIdleTimer()
   waterCursor.hide();
 });
 canvas.addEventListener('pointerleave', e => {
@@ -734,6 +946,7 @@ canvas.addEventListener('pointerleave', e => {
   mouseDown = false;
   activePointerId = null;
   resetStrokeState();
+  _resetIdleTimer()
   waterCursor.hide();
 });
 
@@ -767,15 +980,20 @@ if (window.DeviceOrientationEvent) {
 // ── Tracker callbacks ─────────────────────────────────────────────────────────
 tracker.onClear = () => {
   resetStrokeState();
+  _cancelIdleTimer()   // clearing counts as interaction — reset idle hint
   // Stage 1: ripple wave animation from UV center
   gpgpu.triggerRipple(0.5, 0.5);
   playWaveSound();
   haptic([60, 40, 60]);
-  flashHint('👍 Clearing…');
+  flashHint('👍 Clearing…', { force: true });
   // Stage 2: clear all buffers after ripple finishes (~650 ms)
   setTimeout(() => {
     gpgpu.clear();
-    flashHint('Canvas cleared! ✨');
+    flashHint('Canvas cleared! ✨', { force: true });
+    // Tell all wall projectors to clear too
+    if (_kioskWs && _kioskWs.readyState === WebSocket.OPEN) {
+      _kioskWs.send(JSON.stringify({ type: 'wallClear' }))
+    }
   }, 660);
 };
 
@@ -799,7 +1017,7 @@ function animate() {
     // Hand depth still influences brush response, layered on top of preset values.
     brushSize = THREE.MathUtils.clamp(
       brushState.size * (0.70 + brushDepth * 0.95),
-      0.014,
+      0.003,
       0.11
     );
     waterAmount = THREE.MathUtils.clamp(
@@ -811,7 +1029,10 @@ function animate() {
 
     if (isPainting) {
       moveCursor(indexTip.x, indexTip.y, true);
-      if (!wasPainting) resetStrokeState();
+      if (!wasPainting) {
+        resetStrokeState();
+        _cancelIdleTimer()   // user started painting — cancel idle hint
+      }
       doPaint(indexTip.x, indexTip.y, {
         pressure: THREE.MathUtils.clamp(0.48 + brushDepth * 0.52, 0.08, 1.0),
         smoothing: Math.min(0.90, brushState.smoothing + 0.08),
@@ -829,7 +1050,10 @@ function animate() {
         gpgpu.velUniforms.u_gravity.value.y = BASE_GRAVITY;
       }
     } else {
-      if (wasPainting) resetStrokeState();
+      if (wasPainting) {
+        resetStrokeState();
+        _resetIdleTimer()    // user stopped painting — start 5 s idle countdown
+      }
       handStillTimer = 0;
       gpgpu.velUniforms.u_gravity.value.y = BASE_GRAVITY;
       if (!mouseDown) waterCursor.hide();
@@ -864,6 +1088,7 @@ function animate() {
   gpgpu.update(dt, elapsed);
   scene.updatePaintTexture(dt);
   scene.render();
+  relay.onAfterRender?.()  // MadMapper: capture frame right after composer flush
 }
 
 animate();
